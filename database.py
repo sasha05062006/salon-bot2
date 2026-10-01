@@ -85,14 +85,14 @@ async def add_booking(user_id: int, username: str, service: str, master: str, da
             if start < existing_end and existing_start < end:
                 await db.rollback()
                 return False
-        await db.execute(
+        insert_cursor = await db.execute(
             """INSERT INTO bookings
             (user_id,username,service,master,date,time,duration,name,phone,lang,created_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (user_id, username, service, master, date, time, duration, name, phone, lang, datetime.now(ZoneInfo('Asia/Tashkent')).isoformat())
         )
         await db.commit()
-        return cursor.lastrowid
+        return insert_cursor.lastrowid
 
 
 async def update_booking_status(booking_id: int, status: str) -> bool:
