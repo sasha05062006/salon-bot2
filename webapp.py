@@ -67,6 +67,7 @@ async def me(request):
             "username": user.get("username", ""),
         },
         "is_admin": _is_admin(user),
+        "is_master": bool(await get_master_by_telegram_id(int(user["id"]))),
         "salon": await get_salon_settings(),
     })
 
