@@ -165,5 +165,5 @@ def create_app():
 async def start_webapp():
     runner = web.AppRunner(create_app())
     await runner.setup()
-    await web.TCPSite(runner, os.getenv("WEBAPP_HOST", "0.0.0.0"), int(os.getenv("WEBAPP_PORT", "8080"))).start()
+    await web.TCPSite(runner, os.getenv("WEBAPP_HOST", "0.0.0.0"), int(os.getenv("PORT") or os.getenv("WEBAPP_PORT", "8080"))).start()
     return runner
