@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl
 
 from aiohttp import web
 
-from config import ADMIN_ID
+from config import ADMIN_ID, BOT_TOKEN
 from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -90,6 +90,67 @@ async def catalog(request):
     return web.json_response({"ok": True, "services": result, "salon": await get_salon_settings(), "is_admin": _is_admin(user)})
 
 
+async def _notify_admin(booking):
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    try:
+        text = (
+            "🔔 <b>Новая запись!</b>\\n\\n"
+            f"🆔 Запись №{booking['id']}\\n"
+            f"💇 <b>{booking['service']}</b>\\n"
+            f"👩‍🎨 Мастер: {booking['master']}\\n"
+            f"📅 {booking['date']} · {booking['time']}\\n"
+            f"👤 Клиент: {booking['name']}\\n"
+            f"📞 Телефон: {booking['phone']}"
+            + (f"\\n💬 Telegram: @{booking['username']}" if booking.get('username') else "")
+        )
+        await bot.send_message(
+            ADMIN_ID, text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 Открыть записи", url=os.getenv("WEBAPP_URL", ""))]
+            ])
+        )
+    finally:
+        await bot.session.close()
+
+
+async def _notify_client(booking):
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+    bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    try:
+        lang = booking.get("lang", "ru")
+        if booking["status"] == "confirmed":
+            text = (
+                "✅ <b>Ваша запись подтверждена!</b>\\n\\n"
+                f"💇 {booking['service']}\\n"
+                f"👩‍🎨 {booking['master']}\\n"
+                f"📅 {booking['date']} · {booking['time']}\\n\\n"
+                "Ждём вас! До встречи 💫"
+            ) if lang == "ru" else (
+                "✅ <b>Yozuvingiz tasdiqlandi!</b>\\n\\n"
+                f"💇 {booking['service']}\\n"
+                f"👩‍🎨 {booking['master']}\\n"
+                f"📅 {booking['date']} · {booking['time']}\\n\\n"
+                "Sizni kutamiz! Ko‘rishguncha 💫"
+            )
+        else:
+            text = (
+                "❌ <b>Ваша запись отменена.</b>\\n\\n"
+                f"{booking['service']} · {booking['date']} · {booking['time']}"
+            ) if lang == "ru" else (
+                "❌ <b>Yozuvingiz bekor qilindi.</b>\\n\\n"
+                f"{booking['service']} · {booking['date']} · {booking['time']}"
+            )
+        await bot.send_message(booking["user_id"], text)
+    finally:
+        await bot.session.close()
+
+
 async def create_web_booking(request):
     user = _user_from_request(request)
     try:
@@ -136,6 +197,12 @@ async def create_web_booking(request):
     )
     if not ok:
         raise web.HTTPConflict(text="This time is already booked")
+    booking = await get_booking(await _last_booking_id_for_user(int(user["id"])))
+    if booking:
+        try:
+            await _notify_admin(booking)
+        except Exception:
+            pass
     return web.json_response({"ok": True})
 
 
@@ -156,6 +223,12 @@ async def booking_detail(request):
     return web.json_response({"ok": True, "booking": booking})
 
 
+async def _last_booking_id_for_user(user_id):
+    async with __import__("aiosqlite").connect("bookings.db") as db:
+        row = await (await db.execute("SELECT id FROM bookings WHERE user_id=? ORDER BY id DESC LIMIT 1", (user_id,))).fetchone()
+        return row[0] if row else 0
+
+
 async def booking_status(request):
     user = _user_from_request(request)
     if not _is_admin(user):
@@ -170,7 +243,13 @@ async def booking_status(request):
         raise web.HTTPBadRequest(text="Invalid status")
     if not await update_booking_status(booking_id, status):
         raise web.HTTPNotFound(text="Booking not found")
-    return web.json_response({"ok": True, "booking": await get_booking(booking_id)})
+    updated = await get_booking(booking_id)
+    if updated:
+        try:
+            await _notify_client(updated)
+        except Exception:
+            pass
+    return web.json_response({"ok": True, "booking": updated})
 
 
 async def index(request):
