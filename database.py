@@ -91,7 +91,7 @@ async def add_booking(user_id: int, username: str, service: str, master: str, da
             existing_end = existing_start + timedelta(minutes=existing_duration or 30)
             if start < existing_end and existing_start < end:
                 await db.rollback()
-                return False
+                return None
         insert_cursor = await db.execute(
             """INSERT INTO bookings
             (user_id,username,service,master,date,time,duration,name,phone,lang,created_at)
