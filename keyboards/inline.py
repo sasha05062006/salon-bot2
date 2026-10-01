@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from locales.texts import t
 from config import WEBAPP_URL
 
@@ -45,7 +46,7 @@ async def masters_kb(lang: str, service_key: str):
 
 def dates_kb(lang: str):
     buttons = []
-    today = datetime.now()
+    today = datetime.now(ZoneInfo('Asia/Tashkent'))
     weekdays = {
         "ru": {"Mon":"Пн","Tue":"Вт","Wed":"Ср","Thu":"Чт","Fri":"Пт","Sat":"Сб","Sun":"Вс"},
         "uz": {"Mon":"Du","Tue":"Se","Wed":"Cho","Thu":"Pa","Fri":"Ju","Sat":"Sha","Sun":"Ya"}
