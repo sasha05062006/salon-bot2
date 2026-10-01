@@ -83,7 +83,7 @@ async def catalog(request):
             "price": service["price"],
             "duration": service["duration"],
             "masters": [
-                {"key": m["key"], "name": m["name_ru"] if lang == "ru" else m["name_uz"], "schedule": [{"weekday": int(r[0]), "start": r[1], "end": r[2]} for r in await get_master_schedule(m["key"])]}
+                {"key": m["key"], "name": m["name_ru"] if lang == "ru" else m["name_uz"], "schedule": [{"weekday": int(r[0]), "start": r[1], "end": r[2], "lunch_start": r[3], "lunch_end": r[4]} for r in await get_master_schedule(m["key"])]}
                 for m in masters
             ],
         })
@@ -185,11 +185,15 @@ async def create_web_booking(request):
     parsed_date = datetime.strptime(date, "%d.%m")
     weekday = parsed_date.replace(year=datetime.now().year).weekday()
     schedule_rows = await get_master_schedule(master["key"])
-    day_ranges = [(r[1], r[2]) for r in schedule_rows if int(r[0]) == weekday]
+    day_ranges = [(r[1], r[2], r[3], r[4]) for r in schedule_rows if int(r[0]) == weekday]
     start_dt = datetime.strptime(time, "%H:%M")
     end_dt = start_dt + __import__("datetime").timedelta(minutes=duration)
-    if not any(start_dt >= datetime.strptime(start, "%H:%M") and end_dt <= datetime.strptime(end, "%H:%M") for start, end in day_ranges):
-        raise web.HTTPConflict(text="This time is outside the master's working hours")
+    if not any(
+        start_dt >= datetime.strptime(start, "%H:%M") and end_dt <= datetime.strptime(end, "%H:%M")
+        and not (lunch_start and lunch_end and start_dt < datetime.strptime(lunch_end, "%H:%M") and end_dt > datetime.strptime(lunch_start, "%H:%M"))
+        for start, end, lunch_start, lunch_end in day_ranges
+    ):
+        raise web.HTTPConflict(text="This time is outside the master's working hours or overlaps lunch break")
 
     if not await is_slot_available(date, time, duration, master["name_ru"]):
         raise web.HTTPConflict(text="This time is already booked")
