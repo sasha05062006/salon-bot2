@@ -30,7 +30,7 @@ def main_menu(lang: str):
 async def services_kb(lang: str):
     from database import get_services
     rows = await get_services()
-    buttons = [[InlineKeyboardButton(text=s["name_ru" if lang == "ru" else "name_uz"], callback_data=f"service_{s["key"]}")] for s in rows]
+    buttons = [[InlineKeyboardButton(text=s["name_ru" if lang == "ru" else "name_uz"], callback_data=f"service_{s['key']}")] for s in rows]
     buttons.append([InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="back_to_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -38,7 +38,7 @@ async def services_kb(lang: str):
 async def masters_kb(lang: str, service_key: str):
     from database import get_masters_for_service
     rows = await get_masters_for_service(service_key)
-    buttons = [[InlineKeyboardButton(text=m["name_ru" if lang == "ru" else "name_uz"], callback_data=f"master_{m["key"]}")] for m in rows]
+    buttons = [[InlineKeyboardButton(text=m["name_ru" if lang == "ru" else "name_uz"], callback_data=f"master_{m['key']}")] for m in rows]
     buttons.append([InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="back_to_services")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
