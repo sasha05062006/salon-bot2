@@ -8,6 +8,7 @@ from config import ADMIN_ID
 from locales.texts import t
 from salon_config import SALON
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 router = Router()
 
@@ -75,22 +76,30 @@ async def process_date(callback: CallbackQuery, state: FSMContext):
     date = callback.data.split("_")[1]
     master_key = data.get("master_key")
     schedule_rows = await get_master_schedule(master_key)
-    schedule = {weekday: [[start, end]] for weekday, start, end in schedule_rows}
+    schedule = {int(row[0]): (row[1], row[2], row[3], row[4]) for row in schedule_rows}
     parsed = datetime.strptime(date, "%d.%m")
-    year = datetime.now().year
+    now_tz = datetime.now(ZoneInfo("Asia/Tashkent"))
+    year = now_tz.year
+    if parsed.month < now_tz.month and (now_tz.month - parsed.month) >= 6:
+        year += 1
     selected_date = parsed.replace(year=year)
     weekday = selected_date.weekday()
-    ranges = schedule.get(weekday, [])
+    range_data = schedule.get(weekday)
     available = []
     service_key = data.get("service_key")
     service_row = await get_service(service_key)
     duration = service_row["duration"] if service_row else 30
-    for start, end in ranges:
+    if range_data:
+        start, end, lunch_start, lunch_end = range_data
         cur = datetime.strptime(start, "%H:%M")
         finish = datetime.strptime(end, "%H:%M")
-        while cur < finish:
+        lunch_s = datetime.strptime(lunch_start, "%H:%M") if lunch_start else None
+        lunch_e = datetime.strptime(lunch_end, "%H:%M") if lunch_end else None
+        while cur + timedelta(minutes=duration) <= finish:
             slot = cur.strftime("%H:%M")
-            if cur + timedelta(minutes=duration) <= finish and await is_slot_available(date, slot, duration, data.get("master")):
+            slot_end = cur + timedelta(minutes=duration)
+            in_lunch = lunch_s and lunch_e and cur < lunch_e and slot_end > lunch_s
+            if not in_lunch and await is_slot_available(date, slot, duration, data.get("master")):
                 available.append(slot)
             cur += timedelta(minutes=30)
 
@@ -164,6 +173,29 @@ async def process_phone(message: Message, state: FSMContext):
     service_key = data.get("service_key")
     service_row = await get_service(service_key)
     duration = service_row["duration"] if service_row else 30
+
+    # Final schedule/lunch check immediately before saving the booking.
+    schedule_rows = await get_master_schedule(data.get("master_key"))
+    parsed = datetime.strptime(date, "%d.%m")
+    now_tz = datetime.now(ZoneInfo("Asia/Tashkent"))
+    year = now_tz.year
+    if parsed.month < now_tz.month and (now_tz.month - parsed.month) >= 6:
+        year += 1
+    weekday = parsed.replace(year=year).weekday()
+    row = next((r for r in schedule_rows if int(r[0]) == weekday), None)
+    if not row:
+        await message.answer(t("ru" if lang == "ru" else "uz", "slot_taken"), reply_markup=main_menu(lang))
+        await state.set_state(None)
+        return
+    start_dt = datetime.strptime(time, "%H:%M")
+    end_dt = start_dt + timedelta(minutes=duration)
+    work_start, work_end = datetime.strptime(row[1], "%H:%M"), datetime.strptime(row[2], "%H:%M")
+    lunch_start = datetime.strptime(row[3], "%H:%M") if row[3] else None
+    lunch_end = datetime.strptime(row[4], "%H:%M") if row[4] else None
+    if start_dt < work_start or end_dt > work_end or (lunch_start and lunch_end and start_dt < lunch_end and end_dt > lunch_start):
+        await message.answer(t("ru", "slot_taken") if lang == "ru" else t("uz", "slot_taken"), reply_markup=main_menu(lang))
+        await state.set_state(None)
+        return
 
     # Final availability check immediately before saving the booking.
     if not await is_slot_available(date, time, duration, master):
