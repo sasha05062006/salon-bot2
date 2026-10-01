@@ -341,7 +341,7 @@ async def toggle_master_service(callback: CallbackQuery):
     rows = []
     for s in services:
         mark = "☑️" if s["key"] in assigned else "⬜"
-        rows.append([InlineKeyboardButton(text=f"{mark} {s['name_ru']}", callback_data=f"svcmasters_{master_key}_{s['key']}")])
+        rows.append([InlineKeyboardButton(text=f"{mark} {s['name_ru']}", callback_data=f"svcmasters:{master_key}:{s['key']}")])
     rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data="catalog_masters")])
     await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await callback.answer("Сохранено")
