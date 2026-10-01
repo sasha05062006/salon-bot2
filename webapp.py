@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -83,7 +83,7 @@ async def catalog(request):
             "price": service["price"],
             "duration": service["duration"],
             "masters": [
-                {"key": m["key"], "name": m["name_ru"] if lang == "ru" else m["name_uz"]}
+                {"key": m["key"], "name": m["name_ru"] if lang == "ru" else m["name_uz"], "schedule": [{"weekday": int(r[0]), "start": r[1], "end": r[2]} for r in await get_master_schedule(m["key"])]}
                 for m in masters
             ],
         })
@@ -180,6 +180,17 @@ async def create_web_booking(request):
         raise web.HTTPBadRequest(text="Invalid date or time")
 
     duration = int(service["duration"])
+
+    # Final server-side working-hours check.
+    parsed_date = datetime.strptime(date, "%d.%m")
+    weekday = parsed_date.replace(year=datetime.now().year).weekday()
+    schedule_rows = await get_master_schedule(master["key"])
+    day_ranges = [(r[1], r[2]) for r in schedule_rows if int(r[0]) == weekday]
+    start_dt = datetime.strptime(time, "%H:%M")
+    end_dt = start_dt + __import__("datetime").timedelta(minutes=duration)
+    if not any(start_dt >= datetime.strptime(start, "%H:%M") and end_dt <= datetime.strptime(end, "%H:%M") for start, end in day_ranges):
+        raise web.HTTPConflict(text="This time is outside the master's working hours")
+
     if not await is_slot_available(date, time, duration, master["name_ru"]):
         raise web.HTTPConflict(text="This time is already booked")
 
