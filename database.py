@@ -1,5 +1,6 @@
 import aiosqlite
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 DB_NAME = "bookings.db"
 
@@ -51,6 +52,21 @@ async def seed_catalog():
                     "INSERT OR IGNORE INTO service_masters(service_key,master_key) VALUES(?,?)",
                     (service_key, master_key)
                 )
+
+        # Import the default schedule into the DB only when a day has no saved schedule.
+        # This keeps admin-edited schedules intact on subsequent restarts.
+        for master_key, weekly in SALON.get("master_schedule", {}).items():
+            for weekday, ranges in weekly.items():
+                count = await (await db.execute(
+                    "SELECT COUNT(*) FROM master_schedule WHERE master_key=? AND weekday=?",
+                    (master_key, int(weekday))
+                )).fetchone()
+                if not count[0] and ranges:
+                    start_time, end_time = ranges[0]
+                    await db.execute(
+                        "INSERT OR IGNORE INTO master_schedule(master_key,weekday,start_time,end_time) VALUES(?,?,?,?)",
+                        (master_key, int(weekday), start_time, end_time)
+                    )
         await db.commit()
 
 
@@ -73,10 +89,10 @@ async def add_booking(user_id: int, username: str, service: str, master: str, da
             """INSERT INTO bookings
             (user_id,username,service,master,date,time,duration,name,phone,lang,created_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-            (user_id, username, service, master, date, time, duration, name, phone, lang, datetime.now().isoformat())
+            (user_id, username, service, master, date, time, duration, name, phone, lang, datetime.now(ZoneInfo('Asia/Tashkent')).isoformat())
         )
         await db.commit()
-        return True
+        return cursor.lastrowid
 
 
 async def update_booking_status(booking_id: int, status: str) -> bool:
