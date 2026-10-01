@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qsl
 
@@ -183,7 +183,11 @@ async def create_web_booking(request):
 
     # Final server-side working-hours check.
     parsed_date = datetime.strptime(date, "%d.%m")
-    weekday = parsed_date.replace(year=datetime.now().year).weekday()
+    now_tz = datetime.now(__import__("zoneinfo").ZoneInfo("Asia/Tashkent"))
+    year = now_tz.year
+    if parsed_date.month < now_tz.month and (now_tz.month - parsed_date.month) >= 6:
+        year += 1
+    weekday = parsed_date.replace(year=year).weekday()
     schedule_rows = await get_master_schedule(master["key"])
     day_ranges = [(r[1], r[2], r[3], r[4]) for r in schedule_rows if int(r[0]) == weekday]
     start_dt = datetime.strptime(time, "%H:%M")
