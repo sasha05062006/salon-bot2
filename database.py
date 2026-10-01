@@ -338,7 +338,7 @@ async def update_booking_details(booking_id: int, date: str, time: str, master: 
         await db.execute("UPDATE bookings SET date=?,time=?,master=? WHERE id=?", (date,time,master,booking_id))
         await db.commit()
         return True
-\n
+
 
 async def get_bookings_filtered(date=None, master=None, status=None, q=None):
     async with aiosqlite.connect(DB_NAME) as db:
