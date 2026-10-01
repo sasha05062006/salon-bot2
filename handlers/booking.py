@@ -1,3 +1,4 @@
+import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -236,7 +237,7 @@ async def process_phone(message: Message, state: FSMContext):
     try:
         await message.bot.send_message(ADMIN_ID, text_admin)
     except Exception:
-        pass
+        logging.exception("Failed to notify admin about Telegram booking")
     
     await message.answer(
         t(lang, "booking_success", service=service, date=date, time=time, name=name, phone=phone),
