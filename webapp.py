@@ -118,14 +118,28 @@ async def _notify_admin(booking):
         await bot.session.close()
 
 
-async def _notify_client(booking):
+async def _notify_client(booking, event=None):
     from aiogram import Bot
     from aiogram.client.default import DefaultBotProperties
     from aiogram.enums import ParseMode
     bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
         lang = booking.get("lang", "ru")
-        if booking["status"] == "confirmed":
+        if event == "rescheduled":
+            text = (
+                "🔄 <b>Ваша запись перенесена.</b>\n\n"
+                f"💇 {booking['service']}\n"
+                f"👩‍🎨 {booking['master']}\n"
+                f"📅 {booking['date']} · {booking['time']}\n\n"
+                "Пожалуйста, сохраните новое время."
+            ) if lang == "ru" else (
+                "🔄 <b>Yozuvingiz boshqa vaqtga ko‘chirildi.</b>\n\n"
+                f"💇 {booking['service']}\n"
+                f"👩‍🎨 {booking['master']}\n"
+                f"📅 {booking['date']} · {booking['time']}\n\n"
+                "Yangi vaqtni saqlab qo‘ying."
+            )
+        elif booking["status"] == "confirmed":
             text = (
                 "✅ <b>Ваша запись подтверждена!</b>\n\n"
                 f"💇 {booking['service']}\n"
@@ -251,6 +265,11 @@ async def reschedule_booking(request):
     if not ok:
         raise web.HTTPConflict(text="Selected time is unavailable")
     updated = await get_booking(booking_id)
+    if updated:
+        try:
+            await _notify_client(updated, event="rescheduled")
+        except Exception:
+            logging.exception("Failed to notify client %s about rescheduled booking %s", updated.get("user_id"), booking_id)
     return web.json_response({"ok": True, "booking": updated})
 
 
