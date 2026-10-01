@@ -35,6 +35,9 @@ async def init_db():
             await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_start TEXT")
         if "lunch_end" not in cols:
             await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_end TEXT")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_date_master ON bookings(date, master, status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status, date)")
         await db.commit()
 
 
@@ -329,3 +332,26 @@ async def update_booking_details(booking_id: int, date: str, time: str, master: 
         await db.commit()
         return True
 \n
+
+async def get_bookings_filtered(date=None, master=None, status=None, q=None):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        sql = "SELECT * FROM bookings WHERE 1=1"
+        args = []
+        if date:
+            sql += " AND date=?"; args.append(date)
+        if master:
+            sql += " AND master=?"; args.append(master)
+        if status:
+            sql += " AND status=?"; args.append(status)
+        if q:
+            sql += " AND (name LIKE ? OR phone LIKE ? OR username LIKE ?)"
+            like = "%" + q + "%"; args.extend([like, like, like])
+        sql += " ORDER BY date ASC, time ASC, id ASC"
+        rows = await (await db.execute(sql, args)).fetchall()
+        return [dict(r) for r in rows]
+
+async def get_booking_stats():
+    async with aiosqlite.connect(DB_NAME) as db:
+        rows = await (await db.execute("SELECT status, COUNT(*) FROM bookings GROUP BY status")).fetchall()
+        return {str(status): int(count) for status, count in rows}
