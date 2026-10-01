@@ -283,3 +283,26 @@ async def get_bookings_for_user(user_id: int):
             "SELECT * FROM bookings WHERE user_id=? ORDER BY id DESC LIMIT 50", (user_id,)
         )).fetchall()
         return [dict(r) for r in rows]
+
+
+async def update_booking_details(booking_id: int, date: str, time: str, master: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("PRAGMA busy_timeout=5000")
+        row = await (await db.execute("SELECT duration,status FROM bookings WHERE id=?", (booking_id,))).fetchone()
+        if not row or row[1] == "cancelled":
+            return False
+        duration = int(row[0] or 30)
+        start = datetime.strptime(time, "%H:%M")
+        end = start + timedelta(minutes=duration)
+        cursor = await db.execute(
+            "SELECT time,COALESCE(duration,30) FROM bookings WHERE date=? AND master=? AND status!='cancelled' AND id!=?",
+            (date, master, booking_id)
+        )
+        for existing_time, existing_duration in await cursor.fetchall():
+            es = datetime.strptime(existing_time, "%H:%M")
+            ee = es + timedelta(minutes=int(existing_duration or 30))
+            if start < ee and es < end:
+                return False
+        await db.execute("UPDATE bookings SET date=?,time=?,master=? WHERE id=?", (date,time,master,booking_id))
+        await db.commit()
+        return True
