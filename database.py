@@ -297,6 +297,7 @@ async def get_bookings_for_user(user_id: int):
 async def update_booking_details(booking_id: int, date: str, time: str, master: str):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("PRAGMA busy_timeout=5000")
+        await db.execute("BEGIN IMMEDIATE")
         db.row_factory = aiosqlite.Row
         row = await (await db.execute("SELECT service,duration,status FROM bookings WHERE id=?", (booking_id,))).fetchone()
         if not row or row["status"] == "cancelled":
