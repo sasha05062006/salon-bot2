@@ -46,12 +46,14 @@ async def seed_catalog():
                 "INSERT OR IGNORE INTO masters (key,name_ru,name_uz) VALUES (?,?,?)",
                 (key, m["ru"], m["uz"])
             )
-        for service_key in SALON["services"]:
-            for master_key in SALON["masters"]:
-                await db.execute(
-                    "INSERT OR IGNORE INTO service_masters(service_key,master_key) VALUES(?,?)",
-                    (service_key, master_key)
-                )
+        existing_links = await (await db.execute("SELECT COUNT(*) FROM service_masters")).fetchone()
+        if not existing_links[0]:
+            for service_key in SALON["services"]:
+                for master_key in SALON["masters"]:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO service_masters(service_key,master_key) VALUES(?,?)",
+                        (service_key, master_key)
+                    )
 
         # Import the default schedule into the DB only when a day has no saved schedule.
         # This keeps admin-edited schedules intact on subsequent restarts.
