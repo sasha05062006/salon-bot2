@@ -285,6 +285,43 @@ async def bookings(request):
     return web.json_response({"ok": True, "bookings": await get_all_bookings()})
 
 
+async def admin_create_master(request):
+    user=_user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    d=await request.json()
+    key=str(d.get("key","")).strip(); ru=str(d.get("name_ru","")).strip(); uz=str(d.get("name_uz","")).strip()
+    if not key or not ru or not uz: raise web.HTTPBadRequest(text="Master fields required")
+    try: await add_master(key,ru,uz)
+    except Exception as e: raise web.HTTPConflict(text=str(e))
+    return web.json_response({"ok":True})
+
+async def admin_delete_master(request):
+    user=_user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    await deactivate_master(request.match_info["key"]); return web.json_response({"ok":True})
+
+async def admin_create_service(request):
+    user=_user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    d=await request.json()
+    key=str(d.get("key","")).strip(); ru=str(d.get("name_ru","")).strip(); uz=str(d.get("name_uz","")).strip()
+    price=str(d.get("price","")).strip(); duration=int(d.get("duration",30))
+    if not key or not ru or not uz or not price or duration<5: raise web.HTTPBadRequest(text="Service fields required")
+    try: await add_service(key,ru,uz,price,duration)
+    except Exception as e: raise web.HTTPConflict(text=str(e))
+    return web.json_response({"ok":True})
+
+async def admin_update_service(request):
+    user=_user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    d=await request.json(); await update_service(str(d["key"]),str(d["name_ru"]),str(d["name_uz"]),str(d["price"]),int(d["duration"]))
+    return web.json_response({"ok":True})
+
+async def admin_delete_service(request):
+    user=_user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    await deactivate_service(request.match_info["key"]); return web.json_response({"ok":True})
+
 async def admin_catalog(request):
     user = _user_from_request(request)
     if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
@@ -375,6 +412,11 @@ def create_app():
     app.router.add_get("/api/admin/bookings", bookings)
     app.router.add_get("/api/admin/bookings/filter", admin_booking_filters)
     app.router.add_get("/api/admin/catalog", admin_catalog)
+    app.router.add_post("/api/admin/masters", admin_create_master)
+    app.router.add_delete("/api/admin/masters/{key}", admin_delete_master)
+    app.router.add_post("/api/admin/services", admin_create_service)
+    app.router.add_patch("/api/admin/services/{key}", admin_update_service)
+    app.router.add_delete("/api/admin/services/{key}", admin_delete_service)
     app.router.add_post("/api/admin/service-masters", admin_toggle_link)
     app.router.add_post("/api/my-bookings/{booking_id}/cancel", client_cancel_booking)
     app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
