@@ -368,8 +368,15 @@ async def schedule_list(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("sched_"), F.from_user.id == ADMIN_ID)
 async def schedule_day(callback: CallbackQuery, state: FSMContext):
     _, key, weekday = callback.data.split("_", 2)
+    rows = await get_master_schedule(key)
+    current = next((r for r in rows if int(r[0]) == int(weekday)), None)
+    current_text = ""
+    if current:
+        current_text = f"\n\nСейчас: <b>{current[1]}–{current[2]}</b>"
+        if len(current) >= 5 and current[3] and current[4]:
+            current_text += f", обед <b>{current[3]}–{current[4]}</b>"
     await state.update_data(schedule_master=key, schedule_weekday=int(weekday))
-    await callback.message.answer("Введите график в формате <b>10:00-20:00</b> или с обедом <b>10:00-20:00, обед 13:00-14:00</b>. Для выходного — <b>выходной</b>.")
+    await callback.message.answer("Введите график в формате <b>10:00-20:00</b> или с обедом <b>10:00-20:00, обед 13:00-14:00</b>. Для выходного — <b>выходной</b>."+current_text)
     await state.set_state(AdminStates.adding_master_confirm)
     await callback.answer()
 
