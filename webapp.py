@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID
-from database import add_booking, get_all_bookings, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -146,6 +146,33 @@ async def bookings(request):
     return web.json_response({"ok": True, "bookings": await get_all_bookings()})
 
 
+async def booking_detail(request):
+    user = _user_from_request(request)
+    if not _is_admin(user):
+        raise web.HTTPForbidden(text="Admin access required")
+    booking = await get_booking(int(request.match_info["booking_id"]))
+    if not booking:
+        raise web.HTTPNotFound(text="Booking not found")
+    return web.json_response({"ok": True, "booking": booking})
+
+
+async def booking_status(request):
+    user = _user_from_request(request)
+    if not _is_admin(user):
+        raise web.HTTPForbidden(text="Admin access required")
+    booking_id = int(request.match_info["booking_id"])
+    try:
+        data = await request.json()
+    except Exception:
+        raise web.HTTPBadRequest(text="Invalid JSON")
+    status = str(data.get("status", ""))
+    if status not in {"new", "confirmed", "cancelled"}:
+        raise web.HTTPBadRequest(text="Invalid status")
+    if not await update_booking_status(booking_id, status):
+        raise web.HTTPNotFound(text="Booking not found")
+    return web.json_response({"ok": True, "booking": await get_booking(booking_id)})
+
+
 async def index(request):
     return web.FileResponse(STATIC_DIR / "index.html")
 
@@ -157,6 +184,8 @@ def create_app():
     app.router.add_get("/api/catalog", catalog)
     app.router.add_post("/api/bookings", create_web_booking)
     app.router.add_get("/api/admin/bookings", bookings)
+    app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
+    app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
     app.router.add_get("/", index)
     app.router.add_static("/", STATIC_DIR, show_index=False)
     return app
