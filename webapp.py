@@ -10,7 +10,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -234,6 +234,26 @@ async def create_web_booking(request):
     return web.json_response({"ok": True})
 
 
+async def reschedule_booking(request):
+    user = _user_from_request(request)
+    if not _is_admin(user):
+        raise web.HTTPForbidden(text="Admin access required")
+    try:
+        data = await request.json()
+        booking_id = int(data["booking_id"])
+        date, time, master = str(data["date"]), str(data["time"]), str(data["master"])
+    except Exception:
+        raise web.HTTPBadRequest(text="Invalid reschedule data")
+    booking = await get_booking(booking_id)
+    if not booking:
+        raise web.HTTPNotFound(text="Booking not found")
+    ok = await update_booking_details(booking_id, date, time, master)
+    if not ok:
+        raise web.HTTPConflict(text="Selected time is unavailable")
+    updated = await get_booking(booking_id)
+    return web.json_response({"ok": True, "booking": updated})
+
+
 async def my_bookings(request):
     user = _user_from_request(request)
     return web.json_response({"ok": True, "bookings": await get_bookings_for_user(int(user["id"]))})
@@ -290,6 +310,7 @@ def create_app():
     app.router.add_get("/api/catalog", catalog)
     app.router.add_post("/api/bookings", create_web_booking)
     app.router.add_get("/api/my-bookings", my_bookings)
+    app.router.add_post("/api/admin/bookings/reschedule", reschedule_booking)
     app.router.add_get("/api/admin/bookings", bookings)
     app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
     app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
