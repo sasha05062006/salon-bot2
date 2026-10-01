@@ -97,13 +97,19 @@ async def add_booking(user_id: int, username: str, service: str, master: str, da
         return insert_cursor.lastrowid
 
 
-async def update_booking_status(booking_id: int, status: str) -> bool:
+async def update_booking_status(booking_id: int, status: str):
     if status not in {"new", "confirmed", "cancelled"}:
-        return False
+        return None
     async with aiosqlite.connect(DB_NAME) as db:
+        row = await (await db.execute("SELECT status FROM bookings WHERE id=?", (booking_id,))).fetchone()
+        if not row:
+            return None
+        old_status = row[0]
+        if old_status == status:
+            return None
         cursor = await db.execute("UPDATE bookings SET status=? WHERE id=?", (status, booking_id))
         await db.commit()
-        return cursor.rowcount > 0
+        return old_status if cursor.rowcount else None
 
 
 async def get_booking(booking_id: int):
