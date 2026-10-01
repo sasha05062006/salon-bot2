@@ -10,7 +10,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, deactivate_master, add_service, deactivate_service, update_service, set_master_service
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, get_master_by_name, deactivate_master, add_service, deactivate_service, update_service, set_master_service
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -241,6 +241,17 @@ async def create_web_booking(request):
         raise web.HTTPConflict(text="This time is already booked")
     booking = await get_booking(saved)
     if booking:
+        try:
+            master_row = await get_master_by_name(booking["master"])
+            if master_row and master_row.get("telegram_id"):
+                from aiogram import Bot
+                bot = Bot(BOT_TOKEN)
+                try:
+                    await bot.send_message(master_row["telegram_id"], f"📋 <b>Новая запись к вам</b>\n\n💇 {booking['service']}\n👤 {booking['name']}\n📞 {booking['phone']}\n📅 {booking['date']} · {booking['time']}")
+                finally:
+                    await bot.session.close()
+        except Exception:
+            logging.exception("Failed to notify master about web booking")
         try:
             await _notify_admin(booking)
         except Exception:
