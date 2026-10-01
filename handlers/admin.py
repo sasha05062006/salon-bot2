@@ -369,25 +369,34 @@ async def schedule_list(callback: CallbackQuery):
 async def schedule_day(callback: CallbackQuery, state: FSMContext):
     _, key, weekday = callback.data.split("_", 2)
     await state.update_data(schedule_master=key, schedule_weekday=int(weekday))
-    await callback.message.answer("Введите часы работы, например <b>10:00-20:00</b>. Для выходного напишите <b>выходной</b>.")
+    await callback.message.answer("Введите график в формате <b>10:00-20:00</b> или с обедом <b>10:00-20:00, обед 13:00-14:00</b>. Для выходного — <b>выходной</b>.")
     await state.set_state(AdminStates.adding_master_confirm)
     await callback.answer()
 
 @router.message(AdminStates.adding_master_confirm, F.from_user.id == ADMIN_ID)
 async def schedule_save(message: Message, state: FSMContext):
-    value=message.text.strip().lower()
-    data=await state.get_data()
-    if value in ("выходной","выходной день","off"):
+    value = message.text.strip().lower()
+    data = await state.get_data()
+    if value in ("выходной", "выходной день", "off"):
         await set_master_day(data["schedule_master"], data["schedule_weekday"], None, None)
     else:
         try:
-            start,end=[x.strip() for x in value.split("-",1)]
-            datetime.strptime(start,"%H:%M")
-            datetime.strptime(end,"%H:%M")
+            parts = [x.strip() for x in value.split(",")]
+            start, end = [x.strip() for x in parts[0].split("-", 1)]
+            datetime.strptime(start, "%H:%M")
+            datetime.strptime(end, "%H:%M")
+            lunch_start = lunch_end = None
+            if len(parts) > 1:
+                lunch_text = parts[1].replace("обед", "").strip()
+                lunch_start, lunch_end = [x.strip() for x in lunch_text.split("-", 1)]
+                datetime.strptime(lunch_start, "%H:%M")
+                datetime.strptime(lunch_end, "%H:%M")
+                if lunch_start < start or lunch_end > end or lunch_start >= lunch_end:
+                    raise ValueError
         except Exception:
-            await message.answer("Формат: 10:00-20:00 или «выходной».")
+            await message.answer("Формат: 10:00-20:00 или 10:00-20:00, обед 13:00-14:00. Проверьте время.")
             return
-        await set_master_day(data["schedule_master"], data["schedule_weekday"], start, end)
+        await set_master_day(data["schedule_master"], data["schedule_weekday"], start, end, lunch_start, lunch_end)
     await state.clear()
     await message.answer("✅ Расписание сохранено.", reply_markup=admin_kb())
 
