@@ -10,7 +10,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
