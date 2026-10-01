@@ -226,6 +226,11 @@ async def create_web_booking(request):
     return web.json_response({"ok": True})
 
 
+async def my_bookings(request):
+    user = _user_from_request(request)
+    return web.json_response({"ok": True, "bookings": await get_bookings_for_user(int(user["id"]))})
+
+
 async def bookings(request):
     user = _user_from_request(request)
     if not _is_admin(user):
@@ -276,6 +281,7 @@ def create_app():
     app.router.add_get("/api/me", me)
     app.router.add_get("/api/catalog", catalog)
     app.router.add_post("/api/bookings", create_web_booking)
+    app.router.add_get("/api/my-bookings", my_bookings)
     app.router.add_get("/api/admin/bookings", bookings)
     app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
     app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
