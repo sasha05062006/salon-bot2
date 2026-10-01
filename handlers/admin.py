@@ -109,7 +109,7 @@ async def confirm_booking(callback: CallbackQuery):
             f"📅 {booking['date']}  🕐 {booking['time']}"
         )
     except Exception:
-        logging.exception("Failed to edit admin booking message")
+        logging.exception("Failed to send booking status notification to client")
     await callback.answer("Подтверждено")
 
 
