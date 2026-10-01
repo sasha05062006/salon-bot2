@@ -317,7 +317,7 @@ async def master_services(callback: CallbackQuery):
     rows = []
     for s in services:
         mark = "☑️" if s["key"] in assigned else "⬜"
-        rows.append([InlineKeyboardButton(text=f"{mark} {s['name_ru']}", callback_data=f"svcmasters_{master_key}_{s['key']}")])
+        rows.append([InlineKeyboardButton(text=f"{mark} {s['name_ru']}", callback_data=f"svcmasters:{master_key}:{s['key']}")])
     rows.append([InlineKeyboardButton(text="🔙 Назад", callback_data="catalog_masters")])
     await callback.message.answer(
         f"🔗 <b>Услуги мастера: {master['name_ru']}</b>\n\nНажимайте на услугу, чтобы назначить или снять её.",
@@ -326,10 +326,14 @@ async def master_services(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("svcmasters_"), F.from_user.id == ADMIN_ID)
+@router.callback_query(F.data.startswith("svcmasters:"), F.from_user.id == ADMIN_ID)
 async def toggle_master_service(callback: CallbackQuery):
-    payload = callback.data[len("svcmasters_"):]
-    master_key, service_key = payload.split("_", 1)
+    payload = callback.data[len("svcmasters:"):]
+    try:
+        master_key, service_key = payload.split(":", 1)
+    except ValueError:
+        await callback.answer("Некорректная услуга", show_alert=True)
+        return
     assigned = {s["key"] for s in await get_services_for_master(master_key)}
     await set_master_service(service_key, master_key, service_key not in assigned)
     services = await get_services()
