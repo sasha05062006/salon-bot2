@@ -273,3 +273,12 @@ async def set_master_service(service_key, master_key, enabled):
                 (service_key, master_key)
             )
         await db.commit()
+
+
+async def get_bookings_for_user(user_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute(
+            "SELECT * FROM bookings WHERE user_id=? ORDER BY id DESC LIMIT 50", (user_id,)
+        )).fetchall()
+        return [dict(r) for r in rows]
