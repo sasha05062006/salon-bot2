@@ -262,7 +262,7 @@ async def booking_status(request):
         try:
             await _notify_client(updated)
         except Exception:
-            logging.exception("Failed to notify client %s about booking %s", booking.get("user_id"), booking_id)
+            logging.exception("Failed to notify client %s about booking %s", updated.get("user_id"), booking_id)
     return web.json_response({"ok": True, "booking": updated})
 
 
