@@ -183,7 +183,7 @@ async def create_web_booking(request):
     if not await is_slot_available(date, time, duration, master["name_ru"]):
         raise web.HTTPConflict(text="This time is already booked")
 
-    ok = await add_booking(
+    saved = await add_booking(
         user_id=int(user["id"]),
         username=user.get("username", ""),
         service=service["name_ru"],
@@ -195,7 +195,7 @@ async def create_web_booking(request):
         lang=str(data.get("lang", "ru")),
         duration=duration,
     )
-    if not ok:
+    if not saved:
         raise web.HTTPConflict(text="This time is already booked")
     booking = await get_booking(saved)
     if booking:
