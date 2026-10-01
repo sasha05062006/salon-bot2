@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -221,7 +222,7 @@ async def create_web_booking(request):
         try:
             await _notify_admin(booking)
         except Exception:
-            pass
+            logging.exception("Failed to notify admin about booking %s", booking.get("id"))
     return web.json_response({"ok": True})
 
 
@@ -261,7 +262,7 @@ async def booking_status(request):
         try:
             await _notify_client(updated)
         except Exception:
-            pass
+            logging.exception("Failed to notify client %s about booking %s", booking.get("user_id"), booking_id)
     return web.json_response({"ok": True, "booking": updated})
 
 
