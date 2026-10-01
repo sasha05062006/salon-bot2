@@ -7,7 +7,8 @@ from aiogram.filters import Command
 from config import ADMIN_ID, SETUP_COMMAND
 from states import AdminStates
 from aiogram.fsm.context import FSMContext
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from database import get_all_bookings, update_booking_status, get_booking, get_services, get_masters, get_masters_for_service, get_services_for_master, set_master_service, get_service, add_service, update_service, deactivate_service, add_master, deactivate_master, set_master_day, get_master_schedule, get_salon_settings, set_salon_setting
 
 router = Router()
@@ -68,7 +69,7 @@ async def show_bookings(message: Message):
 async def send_filtered(message: Message, mode: str):
     from datetime import datetime, timedelta
     bookings = await get_all_bookings()
-    today = datetime.now()
+    today = datetime.now(ZoneInfo("Asia/Tashkent"))
     target = today if mode == "today" else today + timedelta(days=1)
     target_str = target.strftime("%d.%m")
     selected = bookings[:30] if mode == "all" else [b for b in bookings if b["date"] == target_str]
