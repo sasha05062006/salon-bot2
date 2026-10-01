@@ -79,6 +79,7 @@ async def seed_catalog():
 
 async def add_booking(user_id: int, username: str, service: str, master: str, date: str, time: str, name: str, phone: str, lang: str = "ru", duration: int = 30) -> int | None:
     async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("PRAGMA busy_timeout=5000")
         await db.execute("BEGIN IMMEDIATE")
         start = datetime.strptime(time, "%H:%M")
         end = start + timedelta(minutes=duration)
