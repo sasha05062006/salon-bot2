@@ -400,3 +400,10 @@ async def mark_reminder(booking_id, kind):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(f"UPDATE bookings SET {col}=1 WHERE id=?", (booking_id,))
         await db.commit()
+
+
+async def get_master_by_name(name):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute("SELECT * FROM masters WHERE active=1 AND (name_ru=? OR name_uz=?) LIMIT 1", (name, name))).fetchone()
+        return dict(row) if row else None
