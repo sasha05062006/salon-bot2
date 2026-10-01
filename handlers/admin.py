@@ -93,7 +93,10 @@ async def confirm_booking(callback: CallbackQuery):
     if not booking:
         await callback.answer("Запись не найдена", show_alert=True)
         return
-    await update_booking_status(booking_id, "confirmed")
+    changed_from = await update_booking_status(booking_id, "confirmed")
+    if changed_from is None:
+        await callback.answer("Запись уже подтверждена или статус изменён", show_alert=True)
+        return
     await callback.message.edit_reply_markup(reply_markup=None)
     try:
         await callback.bot.send_message(
@@ -115,7 +118,10 @@ async def cancel_booking(callback: CallbackQuery):
     if not booking:
         await callback.answer("Запись не найдена", show_alert=True)
         return
-    await update_booking_status(booking_id, "cancelled")
+    changed_from = await update_booking_status(booking_id, "cancelled")
+    if changed_from is None:
+        await callback.answer("Запись уже отменена или статус изменён", show_alert=True)
+        return
     await callback.message.edit_reply_markup(reply_markup=None)
     try:
         await callback.bot.send_message(
