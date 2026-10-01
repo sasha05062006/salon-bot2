@@ -114,9 +114,9 @@ async def process_time(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BookingStates.waiting_for_name)
     
     await callback.message.edit_text(
-        f"✅ {data.get('service')}\n📅 {data.get('date')}  {time}\n\n{t(lang, 'enter_name')}"
+        f"✅ {data.get('service')}\n📅 {data.get('date')}  {time}\n\n{t(lang, 'enter_name')}",
+        reply_markup=cancel_kb(lang)
     )
-    await callback.message.answer(t(lang, "enter_name"), reply_markup=cancel_kb(lang))
     await callback.answer()
 
 
