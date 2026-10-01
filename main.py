@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from aiogram.types import BotCommand, BotCommandScopeChat
+from aiogram.types import BotCommand, BotCommandScopeChat, MenuButtonWebApp, WebAppInfo
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -32,11 +32,25 @@ async def main():
         scope=BotCommandScopeChat(chat_id=ADMIN_ID),
     )
 
+    # Mini App is a normal Telegram menu button for every user.
+    # Access to the admin records inside the app is still protected by ADMIN_ID.
     if WEBAPP_URL:
         await bot.set_chat_menu_button(
-            chat_id=ADMIN_ID,
-            menu_button={"type": "web_app", "text": "📱 Приложение", "web_app": {"url": WEBAPP_URL}},
+            menu_button=MenuButtonWebApp(
+                text="📱 Приложение",
+                web_app=WebAppInfo(url=WEBAPP_URL),
+            )
         )
+        await bot.set_chat_menu_button(
+            chat_id=ADMIN_ID,
+            menu_button=MenuButtonWebApp(
+                text="📱 Приложение",
+                web_app=WebAppInfo(url=WEBAPP_URL),
+            )
+        )
+        logging.info("Telegram Mini App URL: %s", WEBAPP_URL)
+    else:
+        logging.warning("WEBAPP_URL is empty. Generate a public Railway domain or set WEBAPP_URL.")
 
     await start_webapp()
     await bot.delete_webhook(drop_pending_updates=True)
