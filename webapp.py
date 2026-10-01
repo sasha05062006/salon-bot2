@@ -10,7 +10,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, deactivate_master, add_service, deactivate_service, update_service, set_master_service
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, deactivate_master, add_service, deactivate_service, update_service, set_master_service
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -285,6 +285,21 @@ async def bookings(request):
     return web.json_response({"ok": True, "bookings": await get_all_bookings()})
 
 
+async def master_bookings(request):
+    user = _user_from_request(request)
+    master = await get_master_by_telegram_id(int(user["id"]))
+    if not master:
+        raise web.HTTPForbidden(text="Master access is not configured")
+    return web.json_response({"ok": True, "master": master, "bookings": await get_bookings_for_master(master["name_ru"])})
+
+async def admin_set_master_telegram(request):
+    user = _user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    data = await request.json()
+    tid = int(data["telegram_id"]) if str(data.get("telegram_id","")).strip() else None
+    await set_master_telegram_id(str(data["master_key"]), tid)
+    return web.json_response({"ok": True})
+
 async def admin_create_master(request):
     user=_user_from_request(request)
     if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
@@ -412,6 +427,8 @@ def create_app():
     app.router.add_get("/api/admin/bookings", bookings)
     app.router.add_get("/api/admin/bookings/filter", admin_booking_filters)
     app.router.add_get("/api/admin/catalog", admin_catalog)
+    app.router.add_get("/api/master/bookings", master_bookings)
+    app.router.add_patch("/api/admin/master-telegram", admin_set_master_telegram)
     app.router.add_post("/api/admin/masters", admin_create_master)
     app.router.add_delete("/api/admin/masters/{key}", admin_delete_master)
     app.router.add_post("/api/admin/services", admin_create_service)
