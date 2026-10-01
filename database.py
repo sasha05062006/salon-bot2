@@ -355,3 +355,12 @@ async def get_booking_stats():
     async with aiosqlite.connect(DB_NAME) as db:
         rows = await (await db.execute("SELECT status, COUNT(*) FROM bookings GROUP BY status")).fetchall()
         return {str(status): int(count) for status, count in rows}
+
+
+async def get_admin_catalog():
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        services = [dict(x) for x in await (await db.execute("SELECT * FROM services ORDER BY id")).fetchall()]
+        masters = [dict(x) for x in await (await db.execute("SELECT * FROM masters ORDER BY id")).fetchall()]
+        links = [dict(x) for x in await (await db.execute("SELECT service_key,master_key FROM service_masters")).fetchall()]
+        return {"services": services, "masters": masters, "links": links}
