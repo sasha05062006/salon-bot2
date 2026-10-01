@@ -47,11 +47,11 @@ async def process_service(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("master_"))
+@router.callback_query(F.data.startswith("bookmaster_"))
 async def process_master(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", "ru")
-    master_key = callback.data.split("_", 1)[1]
+    master_key = callback.data[len("bookmaster_"):]
     master_row = await get_master(master_key)
     if not master_row:
         await callback.answer("Мастер недоступен", show_alert=True)
