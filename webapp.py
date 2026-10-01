@@ -175,10 +175,18 @@ async def create_web_booking(request):
 
     date, time = str(data["date"]), str(data["time"])
     try:
-        datetime.strptime(date, "%d.%m")
+        parsed_input_date = datetime.strptime(date, "%d.%m")
         datetime.strptime(time, "%H:%M")
     except ValueError:
         raise web.HTTPBadRequest(text="Invalid date or time")
+
+    now_tz = datetime.now(__import__("zoneinfo").ZoneInfo("Asia/Tashkent"))
+    booking_year = now_tz.year
+    if parsed_input_date.month < now_tz.month and (now_tz.month - parsed_input_date.month) >= 6:
+        booking_year += 1
+    booking_date = parsed_input_date.replace(year=booking_year)
+    if booking_date.date() < now_tz.date():
+        raise web.HTTPConflict(text="Cannot book a past date")
 
     duration = int(service["duration"])
 
