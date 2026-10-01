@@ -197,7 +197,7 @@ async def create_web_booking(request):
     )
     if not ok:
         raise web.HTTPConflict(text="This time is already booked")
-    booking = await get_booking(await _last_booking_id_for_user(int(user["id"])))
+    booking = await get_booking(saved)
     if booking:
         try:
             await _notify_admin(booking)
@@ -221,12 +221,6 @@ async def booking_detail(request):
     if not booking:
         raise web.HTTPNotFound(text="Booking not found")
     return web.json_response({"ok": True, "booking": booking})
-
-
-async def _last_booking_id_for_user(user_id):
-    async with __import__("aiosqlite").connect("bookings.db") as db:
-        row = await (await db.execute("SELECT id FROM bookings WHERE user_id=? ORDER BY id DESC LIMIT 1", (user_id,))).fetchone()
-        return row[0] if row else 0
 
 
 async def booking_status(request):
