@@ -38,7 +38,7 @@ async def services_kb(lang: str):
 async def masters_kb(lang: str, service_key: str):
     from database import get_masters_for_service
     rows = await get_masters_for_service(service_key)
-    buttons = [[InlineKeyboardButton(text=m["name_ru" if lang == "ru" else "name_uz"], callback_data=f"master_{m['key']}")] for m in rows]
+    buttons = [[InlineKeyboardButton(text=m["name_ru" if lang == "ru" else "name_uz"], callback_data=f"bookmaster_{m['key']}")] for m in rows]
     buttons.append([InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="back_to_services")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
