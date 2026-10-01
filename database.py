@@ -20,7 +20,7 @@ async def init_db():
             price TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 30,
             active INTEGER NOT NULL DEFAULT 1
         )""")
-        await db.execute("""CREATE TABLE IF NOT EXISTS master_schedule (master_key TEXT, weekday INTEGER, start_time TEXT, end_time TEXT, UNIQUE(master_key,weekday))""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS master_schedule (master_key TEXT, weekday INTEGER, start_time TEXT, end_time TEXT, lunch_start TEXT, lunch_end TEXT, UNIQUE(master_key,weekday))""")
         await db.execute("""CREATE TABLE IF NOT EXISTS masters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             key TEXT UNIQUE, name_ru TEXT NOT NULL, name_uz TEXT NOT NULL,
@@ -30,6 +30,11 @@ async def init_db():
             service_key TEXT NOT NULL, master_key TEXT NOT NULL,
             PRIMARY KEY(service_key, master_key)
         )""")
+        cols = [r[1] for r in await (await db.execute("PRAGMA table_info(master_schedule)")).fetchall()]
+        if "lunch_start" not in cols:
+            await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_start TEXT")
+        if "lunch_end" not in cols:
+            await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_end TEXT")
         await db.commit()
 
 
@@ -66,7 +71,7 @@ async def seed_catalog():
                 if not count[0] and ranges:
                     start_time, end_time = ranges[0]
                     await db.execute(
-                        "INSERT OR IGNORE INTO master_schedule(master_key,weekday,start_time,end_time) VALUES(?,?,?,?)",
+                        "INSERT OR IGNORE INTO master_schedule(master_key,weekday,start_time,end_time,lunch_start,lunch_end) VALUES(?,?,?,?,NULL,NULL)",
                         (master_key, int(weekday), start_time, end_time)
                     )
         await db.commit()
@@ -193,18 +198,24 @@ async def deactivate_master(key):
         await db.commit()
 
 
-async def set_master_day(master_key, weekday, start_time, end_time):
+async def set_master_day(master_key, weekday, start_time, end_time, lunch_start=None, lunch_end=None):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("DELETE FROM master_schedule WHERE master_key=? AND weekday=?", (master_key, weekday))
         if start_time and end_time:
-            await db.execute("INSERT INTO master_schedule(master_key,weekday,start_time,end_time) VALUES(?,?,?,?)", (master_key,weekday,start_time,end_time))
+            await db.execute(
+                "INSERT INTO master_schedule(master_key,weekday,start_time,end_time,lunch_start,lunch_end) VALUES(?,?,?,?,?,?)",
+                (master_key, weekday, start_time, end_time, lunch_start, lunch_end)
+            )
         await db.commit()
+
 
 async def get_master_schedule(master_key):
     async with aiosqlite.connect(DB_NAME) as db:
-        rows=await (await db.execute("SELECT weekday,start_time,end_time FROM master_schedule WHERE master_key=? ORDER BY weekday",(master_key,))).fetchall()
+        rows = await (await db.execute(
+            "SELECT weekday,start_time,end_time,lunch_start,lunch_end FROM master_schedule WHERE master_key=? ORDER BY weekday",
+            (master_key,)
+        )).fetchall()
         return rows
-
 
 async def get_service(key):
     async with aiosqlite.connect(DB_NAME) as db:
