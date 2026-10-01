@@ -4,7 +4,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from states import BookingStates
 from keyboards.inline import services_kb, masters_kb, dates_kb, times_kb, main_menu, cancel_kb, phone_kb
-from database import add_booking, is_slot_available, get_service, get_master, get_master_schedule, get_masters_for_service
+from database import add_booking, is_slot_available, get_service, get_master, get_master_schedule, get_masters_for_service, get_master_by_name
 from config import ADMIN_ID
 from locales.texts import t
 from salon_config import SALON
@@ -222,6 +222,17 @@ async def process_phone(message: Message, state: FSMContext):
         await state.set_state(None)
         return
     
+    # Уведомление назначенному мастеру (если Telegram ID настроен)
+    try:
+        master_row = await get_master_by_name(master)
+        if master_row and master_row.get("telegram_id"):
+            await message.bot.send_message(
+                master_row["telegram_id"],
+                f"📋 <b>Новая запись к вам</b>\n\n💇 {service}\n👤 {name}\n📞 {phone}\n📅 {date} · {time}"
+            )
+    except Exception:
+        logging.exception("Failed to notify master about Telegram booking")
+
     # Уведомление админу
     text_admin = (
         f"🆕 <b>Новая запись!</b>\n\n"
