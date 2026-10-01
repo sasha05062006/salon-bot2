@@ -10,7 +10,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, deactivate_master, add_service, deactivate_service, update_service, set_master_service
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -285,6 +285,18 @@ async def bookings(request):
     return web.json_response({"ok": True, "bookings": await get_all_bookings()})
 
 
+async def admin_catalog(request):
+    user = _user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    return web.json_response(await get_admin_catalog())
+
+async def admin_toggle_link(request):
+    user = _user_from_request(request)
+    if not _is_admin(user): raise web.HTTPForbidden(text="Admin access required")
+    data=await request.json()
+    await set_master_service(str(data["service_key"]),str(data["master_key"]),bool(data.get("enabled")))
+    return web.json_response({"ok":True})
+
 async def admin_booking_filters(request):
     user = _user_from_request(request)
     if not _is_admin(user):
@@ -362,6 +374,8 @@ def create_app():
     app.router.add_post("/api/admin/bookings/reschedule", reschedule_booking)
     app.router.add_get("/api/admin/bookings", bookings)
     app.router.add_get("/api/admin/bookings/filter", admin_booking_filters)
+    app.router.add_get("/api/admin/catalog", admin_catalog)
+    app.router.add_post("/api/admin/service-masters", admin_toggle_link)
     app.router.add_post("/api/my-bookings/{booking_id}/cancel", client_cancel_booking)
     app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
     app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
