@@ -31,10 +31,16 @@ async def init_db():
             PRIMARY KEY(service_key, master_key)
         )""")
         cols = [r[1] for r in await (await db.execute("PRAGMA table_info(master_schedule)")).fetchall()]
+        master_cols = [r[1] for r in await (await db.execute("PRAGMA table_info(masters)")).fetchall()]
+        if "telegram_id" not in master_cols:
+            await db.execute("ALTER TABLE masters ADD COLUMN telegram_id INTEGER")
         if "lunch_start" not in cols:
             await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_start TEXT")
         if "lunch_end" not in cols:
             await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_end TEXT")
+        bcols = [r[1] for r in await (await db.execute("PRAGMA table_info(bookings)")).fetchall()]
+        if "reminder_24_sent" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN reminder_24_sent INTEGER NOT NULL DEFAULT 0")
+        if "reminder_2_sent" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN reminder_2_sent INTEGER NOT NULL DEFAULT 0")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_date_master ON bookings(date, master, status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status, date)")
@@ -364,3 +370,33 @@ async def get_admin_catalog():
         masters = [dict(x) for x in await (await db.execute("SELECT * FROM masters ORDER BY id")).fetchall()]
         links = [dict(x) for x in await (await db.execute("SELECT service_key,master_key FROM service_masters")).fetchall()]
         return {"services": services, "masters": masters, "links": links}
+
+
+async def set_master_telegram_id(master_key, telegram_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE masters SET telegram_id=? WHERE key=?", (telegram_id, master_key))
+        await db.commit()
+
+async def get_master_by_telegram_id(telegram_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute("SELECT * FROM masters WHERE active=1 AND telegram_id=? LIMIT 1", (telegram_id,))).fetchone()
+        return dict(row) if row else None
+
+async def get_bookings_for_master(master_name):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute("SELECT * FROM bookings WHERE master=? AND status!='cancelled' ORDER BY date ASC,time ASC,id ASC", (master_name,))).fetchall()
+        return [dict(r) for r in rows]
+
+async def get_confirmed_bookings_for_reminders():
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute("SELECT * FROM bookings WHERE status='confirmed' AND user_id IS NOT NULL AND (reminder_24_sent=0 OR reminder_2_sent=0)")).fetchall()
+        return [dict(r) for r in rows]
+
+async def mark_reminder(booking_id, kind):
+    col = "reminder_24_sent" if kind == "24h" else "reminder_2_sent"
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(f"UPDATE bookings SET {col}=1 WHERE id=?", (booking_id,))
+        await db.commit()
