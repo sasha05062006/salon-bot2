@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl
 
 from aiohttp import web
 
-from config import ADMIN_ID, BOT_TOKEN
+from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
 from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -110,7 +110,7 @@ async def _notify_admin(booking):
         await bot.send_message(
             ADMIN_ID, text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📋 Открыть записи", url=os.getenv("WEBAPP_URL", ""))]
+                [InlineKeyboardButton(text="📋 Открыть записи", url=WEBAPP_URL)]
             ])
         )
     finally:
