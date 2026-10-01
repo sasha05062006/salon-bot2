@@ -7,7 +7,8 @@ from aiogram.filters import Command
 from config import ADMIN_ID, SETUP_COMMAND
 from states import AdminStates
 from aiogram.fsm.context import FSMContext
-from datetime import datetime, timedelta
+from datetime import datetime
+import logging, timedelta
 from zoneinfo import ZoneInfo
 from database import get_all_bookings, update_booking_status, get_booking, get_services, get_masters, get_masters_for_service, get_services_for_master, set_master_service, get_service, add_service, update_service, deactivate_service, add_master, deactivate_master, set_master_day, get_master_schedule, get_salon_settings, set_salon_setting
 
@@ -108,7 +109,7 @@ async def confirm_booking(callback: CallbackQuery):
             f"📅 {booking['date']}  🕐 {booking['time']}"
         )
     except Exception:
-        pass
+        logging.exception("Failed to edit admin booking message")
     await callback.answer("Подтверждено")
 
 
@@ -133,7 +134,7 @@ async def cancel_booking(callback: CallbackQuery):
             f"📅 {booking['date']}  🕐 {booking['time']}"
         )
     except Exception:
-        pass
+        logging.exception("Failed to edit admin booking message")
     await callback.answer("Отменено")
 
 
