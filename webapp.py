@@ -98,14 +98,14 @@ async def _notify_admin(booking):
     bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
         text = (
-            "🔔 <b>Новая запись!</b>\\n\\n"
-            f"🆔 Запись №{booking['id']}\\n"
-            f"💇 <b>{booking['service']}</b>\\n"
-            f"👩‍🎨 Мастер: {booking['master']}\\n"
-            f"📅 {booking['date']} · {booking['time']}\\n"
-            f"👤 Клиент: {booking['name']}\\n"
+            "🔔 <b>Новая запись!</b>\n\n"
+            f"🆔 Запись №{booking['id']}\n"
+            f"💇 <b>{booking['service']}</b>\n"
+            f"👩‍🎨 Мастер: {booking['master']}\n"
+            f"📅 {booking['date']} · {booking['time']}\n"
+            f"👤 Клиент: {booking['name']}\n"
             f"📞 Телефон: {booking['phone']}"
-            + (f"\\n💬 Telegram: @{booking['username']}" if booking.get('username') else "")
+            + (f"\n💬 Telegram: @{booking['username']}" if booking.get('username') else "")
         )
         await bot.send_message(
             ADMIN_ID, text,
@@ -126,24 +126,24 @@ async def _notify_client(booking):
         lang = booking.get("lang", "ru")
         if booking["status"] == "confirmed":
             text = (
-                "✅ <b>Ваша запись подтверждена!</b>\\n\\n"
-                f"💇 {booking['service']}\\n"
-                f"👩‍🎨 {booking['master']}\\n"
-                f"📅 {booking['date']} · {booking['time']}\\n\\n"
+                "✅ <b>Ваша запись подтверждена!</b>\n\n"
+                f"💇 {booking['service']}\n"
+                f"👩‍🎨 {booking['master']}\n"
+                f"📅 {booking['date']} · {booking['time']}\n\n"
                 "Ждём вас! До встречи 💫"
             ) if lang == "ru" else (
-                "✅ <b>Yozuvingiz tasdiqlandi!</b>\\n\\n"
-                f"💇 {booking['service']}\\n"
-                f"👩‍🎨 {booking['master']}\\n"
-                f"📅 {booking['date']} · {booking['time']}\\n\\n"
+                "✅ <b>Yozuvingiz tasdiqlandi!</b>\n\n"
+                f"💇 {booking['service']}\n"
+                f"👩‍🎨 {booking['master']}\n"
+                f"📅 {booking['date']} · {booking['time']}\n\n"
                 "Sizni kutamiz! Ko‘rishguncha 💫"
             )
         else:
             text = (
-                "❌ <b>Ваша запись отменена.</b>\\n\\n"
+                "❌ <b>Ваша запись отменена.</b>\n\n"
                 f"{booking['service']} · {booking['date']} · {booking['time']}"
             ) if lang == "ru" else (
-                "❌ <b>Yozuvingiz bekor qilindi.</b>\\n\\n"
+                "❌ <b>Yozuvingiz bekor qilindi.</b>\n\n"
                 f"{booking['service']} · {booking['date']} · {booking['time']}"
             )
         await bot.send_message(booking["user_id"], text)
