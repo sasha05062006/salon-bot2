@@ -236,3 +236,13 @@ async def set_master_service(service_key, master_key, enabled):
                 (service_key, master_key)
             )
         await db.commit()
+
+
+async def update_booking_status(booking_id: int, status: str) -> bool:
+    allowed = {"new", "confirmed", "cancelled"}
+    if status not in allowed:
+        return False
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("UPDATE bookings SET status=? WHERE id=?", (status, booking_id))
+        await db.commit()
+        return cursor.rowcount > 0
