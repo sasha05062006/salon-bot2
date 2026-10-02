@@ -39,6 +39,7 @@ async def init_db():
         if "lunch_end" not in cols:
             await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_end TEXT")
         bcols = [r[1] for r in await (await db.execute("PRAGMA table_info(bookings)")).fetchall()]
+        if "master_comment" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN master_comment TEXT")
         if "reminder_24_sent" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN reminder_24_sent INTEGER NOT NULL DEFAULT 0")
         if "reminder_2_sent" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN reminder_2_sent INTEGER NOT NULL DEFAULT 0")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_date_master ON bookings(date, master, status)")
@@ -113,7 +114,7 @@ async def add_booking(user_id: int, username: str, service: str, master: str, da
 
 
 async def update_booking_status(booking_id: int, status: str):
-    if status not in {"new", "confirmed", "cancelled"}:
+    if status not in {"new", "confirmed", "cancelled", "in_progress", "completed", "no_show"}:
         return None
     async with aiosqlite.connect(DB_NAME) as db:
         row = await (await db.execute("SELECT status FROM bookings WHERE id=?", (booking_id,))).fetchone()
