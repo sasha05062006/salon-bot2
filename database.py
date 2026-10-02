@@ -14,6 +14,7 @@ async def init_db():
             name TEXT, phone TEXT, lang TEXT DEFAULT 'ru',
             status TEXT DEFAULT 'new', created_at TEXT
         )""")
+        await db.execute("CREATE TABLE IF NOT EXISTS salon_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         await db.execute("""CREATE TABLE IF NOT EXISTS services (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             key TEXT UNIQUE, name_ru TEXT NOT NULL, name_uz TEXT NOT NULL,
@@ -164,8 +165,7 @@ async def is_slot_booked(date: str, time: str, master: str) -> bool:
 
 async def get_salon_settings():
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("CREATE TABLE IF NOT EXISTS salon_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        rows=await (await db.execute("SELECT key,value FROM salon_settings")).fetchall()
+        rows = await (await db.execute("SELECT key,value FROM salon_settings")).fetchall()
         return dict(rows)
 
 async def set_salon_setting(key, value):
