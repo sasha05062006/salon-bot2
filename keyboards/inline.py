@@ -64,7 +64,7 @@ def times_kb(lang: str, available_times=None):
     times = available_times if available_times is not None else ["10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00"]
     buttons=[]; row=[]
     if not times:
-        buttons.append([InlineKeyboardButton(text=t(lang, "no_slots"), callback_data="noop")])
+        buttons.append([InlineKeyboardButton(text=t(lang, "no_slots"), callback_data="back_to_dates")])
     for time in times:
         row.append(InlineKeyboardButton(text=time, callback_data=f"time_{time}"))
         if len(row)==3: buttons.append(row); row=[]
