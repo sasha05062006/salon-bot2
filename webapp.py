@@ -218,6 +218,16 @@ async def create_web_booking(request):
         raise web.HTTPConflict(text="Cannot book a past date")
 
     duration = int(service["duration"])
+    name = str(data["name"]).strip()
+    phone = str(data["phone"]).strip()
+    if len(name) < 2 or len(name) > 60:
+        raise web.HTTPBadRequest(text="Invalid name")
+    import re
+    if not re.fullmatch(r"\+?[0-9 ()-]{8,20}", phone):
+        raise web.HTTPBadRequest(text="Invalid phone")
+    free_slots = await get_free_slots(service["key"], master["key"], date)
+    if time not in free_slots:
+        raise web.HTTPConflict(text="This time is unavailable")
 
     # Final server-side working-hours check.
     parsed_date = datetime.strptime(date, "%d.%m")
@@ -262,9 +272,9 @@ async def create_web_booking(request):
             master_row = await get_master_by_name(booking["master"])
             if master_row and master_row.get("telegram_id"):
                 from aiogram import Bot
-                bot = Bot(BOT_TOKEN)
+                bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
                 try:
-                    await bot.send_message(master_row["telegram_id"], f"📋 <b>Новая запись к вам</b>\n\n💇 {booking['service']}\n👤 {booking['name']}\n📞 {booking['phone']}\n📅 {booking['date']} · {booking['time']}")
+                    await bot.send_message(master_row["telegram_id"], f"📋 <b>Новая запись к вам</b>\n\n💇 {html.escape(str(booking['service']))}\n👤 {html.escape(str(booking['name']))}\n📞 {html.escape(str(booking['phone']))}\n📅 {html.escape(str(booking['date']))} · {html.escape(str(booking['time']))}")
                 finally:
                     await bot.session.close()
         except Exception:
