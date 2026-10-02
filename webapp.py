@@ -428,6 +428,8 @@ async def client_cancel_booking(request):
         raise web.HTTPNotFound(text="Booking not found")
     if booking["status"] == "cancelled":
         return web.json_response({"ok": True, "booking": booking})
+    if booking["status"] in {"completed", "no_show"}:
+        raise web.HTTPConflict(text="Completed bookings cannot be cancelled")
     await update_booking_status(booking_id, "cancelled")
     updated = await get_booking(booking_id)
     if updated:
@@ -470,7 +472,7 @@ async def booking_status(request):
     except Exception:
         raise web.HTTPBadRequest(text="Invalid JSON")
     status = str(data.get("status", ""))
-    master_statuses = {"completed", "no_show", "in_progress"}
+    master_statuses = {"completed", "no_show"}
     if master and not is_admin:
         if status not in master_statuses:
             raise web.HTTPForbidden(text="Masters may only set completed or no_show")
@@ -479,7 +481,7 @@ async def booking_status(request):
         if not await update_booking_master_result(booking_id, status, comment):
             raise web.HTTPBadRequest(text="Invalid master status")
     else:
-        if status not in {"new", "confirmed", "cancelled"}:
+        if status not in {"new", "confirmed", "cancelled", "in_progress", "completed", "no_show"}:
             raise web.HTTPBadRequest(text="Invalid status")
         if not await update_booking_status(booking_id, status):
             raise web.HTTPNotFound(text="Booking not found")
