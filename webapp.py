@@ -509,6 +509,7 @@ def create_app():
     app.router.add_get("/api/my-bookings", my_bookings)
     app.router.add_post("/api/admin/bookings/reschedule", reschedule_booking)
     app.router.add_get("/api/admin/bookings", bookings)
+    app.router.add_get("/api/bookings/{booking_id}", booking_detail)
     app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
     app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
     app.router.add_get("/api/admin/bookings/filter", admin_booking_filters)
