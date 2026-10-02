@@ -98,30 +98,32 @@ async def catalog(request):
                 for m in masters
             ],
         })
-    public_masters=[{"key":m["key"],"name_ru":m["name_ru"],"name_uz":m["name_uz"]} for m in await __import__("database").get_masters()]\n    return web.json_response({"ok": True, "services": result, "masters": public_masters, "salon": await get_salon_settings(), "is_admin": _is_admin(user), "today": datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d")})
+    public_masters=[{"key":m["key"],"name_ru":m["name_ru"],"name_uz":m["name_uz"]} for m in await __import__("database").get_masters()]
+    return web.json_response({"ok": True, "services": result, "masters": public_masters, "salon": await get_salon_settings(), "is_admin": _is_admin(user), "today": datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d")})
 
 
 async def _notify_admin(booking, event="created"):
     from aiogram import Bot
     from aiogram.client.default import DefaultBotProperties
     from aiogram.enums import ParseMode
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
     bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
+        header = "❌ <b>Клиент отменил запись</b>" if event == "cancelled" else "🔔 <b>Новая запись!</b>"
         text = (
-            "❌ <b>Клиент отменил запись</b>\n\n" if event=="cancelled" else "🔔 <b>Новая запись!</b>\n\n"
-            f"🆔 Запись №{booking['id']}\n"
-            f"💇 <b>{booking['service']}</b>\n"
-            f"👩‍🎨 Мастер: {booking['master']}\n"
-            f"📅 {booking['date']} · {booking['time']}\n"
-            f"👤 Клиент: {booking['name']}\n"
-            f"📞 Телефон: {booking['phone']}"
-            + (f"\n💬 Telegram: @{booking['username']}" if booking.get('username') else "")
+            header + "\n\n"
+            f"🆔 Запись №{html.escape(str(booking['id']))}\n"
+            f"💇 <b>{html.escape(str(booking['service']))}</b>\n"
+            f"👩‍🎨 Мастер: {html.escape(str(booking['master']))}\n"
+            f"📅 {html.escape(str(booking['date']))} · {html.escape(str(booking['time']))}\n"
+            f"👤 Клиент: {html.escape(str(booking['name']))}\n"
+            f"📞 Телефон: {html.escape(str(booking['phone']))}"
+            + (f"\n💬 Telegram: @{html.escape(str(booking['username']))}" if booking.get('username') else "")
         )
         await bot.send_message(
             ADMIN_ID, text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📋 Открыть записи", web_app=__import__("aiogram").types.WebAppInfo(url=WEBAPP_URL))]
+                [InlineKeyboardButton(text="📋 Открыть записи", web_app=WebAppInfo(url=WEBAPP_URL))]
             ])
         )
     finally:
