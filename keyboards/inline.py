@@ -16,7 +16,6 @@ def language_kb():
 
 def main_menu(lang: str):
     keyboard = [
-        [KeyboardButton(text=t(lang, "btn_book"))],
         [KeyboardButton(text=t(lang, "btn_price")), KeyboardButton(text=t(lang, "btn_address"))],
         [KeyboardButton(text=t(lang, "btn_contacts"))],
     ]
