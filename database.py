@@ -2,6 +2,7 @@ import aiosqlite
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from salon_config import SALON
 
 DB_NAME = os.getenv("DB_PATH", "bookings.db")
 
