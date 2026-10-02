@@ -462,6 +462,19 @@ async def client_cancel_booking(request):
             await _notify_admin(updated, event="cancelled")
         except Exception:
             logging.exception("Failed to notify admin about client cancellation %s", booking_id)
+        try:
+            master_row=await get_master_by_name(updated["master"])
+            if master_row and master_row.get("telegram_id"):
+                from aiogram import Bot
+                from aiogram.client.default import DefaultBotProperties
+                from aiogram.enums import ParseMode
+                bot=Bot(BOT_TOKEN,default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+                try:
+                    await bot.send_message(master_row["telegram_id"],f"❌ <b>Клиент отменил запись</b>\n\n💇 {html.escape(str(updated['service']))}\n👤 {html.escape(str(updated['name']))}\n📅 {html.escape(str(updated['date']))} · {html.escape(str(updated['time']))}")
+                finally:
+                    await bot.session.close()
+        except Exception:
+            logging.exception("Failed to notify master about client cancellation %s", booking_id)
     return web.json_response({"ok": True, "booking": updated})
 
 
