@@ -6,9 +6,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from dotenv import load_dotenv
 from urllib.request import urlopen, Request
 
 ROOT = Path(__file__).resolve().parent
+load_dotenv(ROOT / ".env")
 PORT = int(os.getenv("WEBAPP_PORT", "8080"))
 TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_ID = os.getenv("ADMIN_ID", "")
