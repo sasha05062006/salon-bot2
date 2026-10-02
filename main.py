@@ -38,10 +38,12 @@ async def reminder_loop(bot):
 
 async def main():
     logging.basicConfig(level=logging.INFO)
-    await init_db()
-    await seed_catalog()
+    bot = None
+    try:
+        await init_db()
+        await seed_catalog()
 
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+        bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(start.router)
     dp.include_router(booking.router)
@@ -78,9 +80,26 @@ async def main():
     else:
         logging.warning("WEBAPP_URL is empty. Generate a public Railway domain or set WEBAPP_URL.")
 
-    await start_webapp()
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+        await start_webapp()
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+    except Exception:
+        logging.exception("Application startup/runtime failure")
+        # Keep the HTTP Mini App alive even if bot/database startup fails.
+        # Railway can therefore serve a graceful maintenance page instead of
+        # returning "Application failed to respond".
+        if bot:
+            try:
+                await bot.session.close()
+            except Exception:
+                pass
+        try:
+            await start_webapp()
+        except Exception:
+            logging.exception("Failed to start fallback web server")
+            raise
+        while True:
+            await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
