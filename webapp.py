@@ -471,8 +471,6 @@ def create_app():
     app.router.add_delete("/api/admin/services/{key}", admin_delete_service)
     app.router.add_post("/api/admin/service-masters", admin_toggle_link)
     app.router.add_post("/api/my-bookings/{booking_id}/cancel", client_cancel_booking)
-    app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
-    app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
     app.router.add_get("/", index)
     app.router.add_static("/", STATIC_DIR, show_index=False)
     return app
