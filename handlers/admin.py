@@ -10,6 +10,7 @@ from aiogram.fsm.context import FSMContext
 from datetime import datetime, timedelta
 import logging
 import uuid
+import html
 from zoneinfo import ZoneInfo
 from database import get_all_bookings, update_booking_status, get_booking, get_services, get_masters, get_master, get_masters_for_service, get_services_for_master, set_master_service, get_service, add_service, update_service, deactivate_service, add_master, deactivate_master, set_master_day, get_master_schedule, get_salon_settings, set_salon_setting
 
@@ -42,13 +43,13 @@ def booking_actions(booking_id: int):
 
 
 def format_booking(b):
-    status = {"new":"🆕 Новая","confirmed":"✅ Подтверждена","cancelled":"❌ Отменена","in_progress":"🛠 В работе","completed":"✅ Выполнена","no_show":"🚫 Не пришёл"}.get(b.get("status"),b.get("status","new"))
+    status={"new":"🆕 Новая","confirmed":"✅ Подтверждена","cancelled":"❌ Отменена","in_progress":"🛠 В работе","completed":"✅ Выполнена","no_show":"🚫 Не пришёл"}.get(b.get("status"),b.get("status","new"))
     return (
-        f"#{b['id']} | <b>{b['service']}</b>\n"
-        f"👩‍🎨 {b.get('master', '—')}\n"
-        f"📅 {b['date']}  🕐 {b['time']}\n"
-        f"👤 {b['name']}\n"
-        f"📱 {b['phone']}\n"
+        f"#{b['id']} | <b>{html.escape(str(b['service']))}</b>\n"
+        f"👩‍🎨 {html.escape(str(b.get('master','—')))}\n"
+        f"📅 {html.escape(str(b['date']))}  🕐 {html.escape(str(b['time']))}\n"
+        f"👤 {html.escape(str(b['name']))}\n"
+        f"📱 {html.escape(str(b['phone']))}\n"
         f"{status}"
     )
 
