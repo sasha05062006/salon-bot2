@@ -408,3 +408,13 @@ async def get_master_by_name(name):
         db.row_factory = aiosqlite.Row
         row = await (await db.execute("SELECT * FROM masters WHERE active=1 AND (name_ru=? OR name_uz=?) LIMIT 1", (name, name))).fetchone()
         return dict(row) if row else None
+
+
+async def update_booking_master_result(booking_id, status, comment=None):
+    allowed = {"completed", "no_show"}
+    if status not in allowed:
+        return False
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE bookings SET status=?, master_comment=? WHERE id=?", (status, comment, booking_id))
+        await db.commit()
+        return True
