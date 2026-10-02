@@ -411,7 +411,7 @@ async def get_master_by_name(name):
 
 
 async def update_booking_master_result(booking_id, status, comment=None):
-    allowed = {"completed", "no_show"}
+    allowed = {"completed", "no_show", "in_progress"}
     if status not in allowed:
         return False
     async with aiosqlite.connect(DB_NAME) as db:
