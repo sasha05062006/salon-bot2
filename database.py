@@ -517,3 +517,13 @@ async def update_booking_master_result(booking_id, status, comment=None):
         await db.execute("UPDATE bookings SET status=?,master_comment=? WHERE id=?",(status,comment,booking_id))
         await db.commit()
         return True
+
+
+async def set_master_comment(booking_id, comment):
+    async with aiosqlite.connect(DB_NAME) as db:
+        row=await (await db.execute("SELECT status FROM bookings WHERE id=?",(booking_id,))).fetchone()
+        if not row or row[0] not in {"confirmed","in_progress","completed","no_show"}:
+            return False
+        await db.execute("UPDATE bookings SET master_comment=? WHERE id=?",(str(comment or "")[:1000],booking_id))
+        await db.commit()
+        return True
