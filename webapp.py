@@ -97,7 +97,7 @@ async def catalog(request):
                 for m in masters
             ],
         })
-    return web.json_response({"ok": True, "services": result, "salon": await get_salon_settings(), "is_admin": _is_admin(user)})
+    return web.json_response({"ok": True, "services": result, "masters": await __import__("database").get_masters(), "salon": await get_salon_settings(), "is_admin": _is_admin(user)})
 
 
 async def _notify_admin(booking):
