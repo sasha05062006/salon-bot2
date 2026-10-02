@@ -34,3 +34,13 @@ Telegram salon booking bot + Telegram Mini App.
 ### Важно
 
 Это бесплатный режим для разработки/первого запуска. Если компьютер выключен, Mini App недоступен. Для постоянной работы позже можно перенести backend на бесплатный/платный облачный хостинг.
+
+
+## Production notes
+
+- Mini App uses separate roles: client (booking), master (own bookings/status result), admin (full booking/catalog/schedule management).
+- Booking creation is disabled for admin/master accounts; clients create bookings only in the Mini App.
+- In Telegram chat, booking is not exposed as a regular chat flow; the Mini App is the booking interface.
+- Set `DB_PATH` to a persistent Railway Volume path (for example `/data/bookings.db`) so bookings survive redeploys.
+- `WEBAPP_URL` should point to the public HTTPS Railway URL (or the Quick Tunnel URL in local development).
+- Master permissions: a master cannot confirm, cancel, or reschedule. A master can mark a confirmed/in-progress booking as completed or no-show and add a comment.
