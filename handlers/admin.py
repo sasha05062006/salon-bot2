@@ -9,8 +9,9 @@ from states import AdminStates
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, timedelta
 import logging
+import uuid
 from zoneinfo import ZoneInfo
-from database import get_all_bookings, update_booking_status, get_booking, get_services, get_masters, get_masters_for_service, get_services_for_master, set_master_service, get_service, add_service, update_service, deactivate_service, add_master, deactivate_master, set_master_day, get_master_schedule, get_salon_settings, set_salon_setting
+from database import get_all_bookings, update_booking_status, get_booking, get_services, get_masters, get_master, get_masters_for_service, get_services_for_master, set_master_service, get_service, add_service, update_service, deactivate_service, add_master, deactivate_master, set_master_day, get_master_schedule, get_salon_settings, set_salon_setting
 
 router = Router()
 
@@ -41,7 +42,7 @@ def booking_actions(booking_id: int):
 
 
 def format_booking(b):
-    status = {"new": "🆕 Новая", "confirmed": "✅ Подтверждена", "cancelled": "❌ Отменена"}.get(b.get("status"), b.get("status", "new"))
+    status = {"new":"🆕 Новая","confirmed":"✅ Подтверждена","cancelled":"❌ Отменена","in_progress":"🛠 В работе","completed":"✅ Выполнена","no_show":"🚫 Не пришёл"}.get(b.get("status"),b.get("status","new"))
     return (
         f"#{b['id']} | <b>{b['service']}</b>\n"
         f"👩‍🎨 {b.get('master', '—')}\n"
@@ -186,14 +187,14 @@ async def service_edit_start(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.editing_service_ru, F.from_user.id == ADMIN_ID)
 async def service_edit_ru(message: Message, state: FSMContext):
-    await state.update_data(name_ru=message.text.strip())
+    await state.update_data(name_ru=(message.text or "").strip())
     await state.set_state(AdminStates.editing_service_uz)
     await message.answer("Введите новое название на узбекском:")
 
 
 @router.message(AdminStates.editing_service_uz, F.from_user.id == ADMIN_ID)
 async def service_edit_uz(message: Message, state: FSMContext):
-    await state.update_data(name_uz=message.text.strip())
+    await state.update_data(name_uz=(message.text or "").strip())
     await state.set_state(AdminStates.editing_service_price)
     await message.answer("Введите новую цену (например: 120 000 сум):")
 
@@ -287,7 +288,7 @@ async def service_duration(message: Message, state: FSMContext):
         await message.answer("Введите число минут от 5 до 600.")
         return
     data=await state.get_data()
-    key="service_"+str(abs(hash(data["name_ru"])) % 1000000)
+    key="service_"+uuid.uuid4().hex[:8]
     await add_service(key,data["name_ru"],data["name_uz"],data["price"],duration)
     await state.clear()
     await message.answer("✅ Услуга добавлена.", reply_markup=admin_kb())
@@ -307,7 +308,7 @@ async def master_ru(message: Message, state: FSMContext):
 @router.message(AdminStates.adding_master_uz, F.from_user.id == ADMIN_ID)
 async def master_uz(message: Message, state: FSMContext):
     data=await state.get_data()
-    key="master_"+str(abs(hash(data["name_ru"])) % 1000000)
+    key="master_"+uuid.uuid4().hex[:8]
     await add_master(key,data["name_ru"],message.text.strip())
     await state.clear()
     await message.answer("✅ Мастер добавлен. Расписание настроим следующим шагом.", reply_markup=admin_kb())
@@ -373,9 +374,9 @@ async def schedule_list(callback: CallbackQuery):
         )
     await callback.answer()
 
-@router.callback_query(F.data.startswith("sched_"), F.from_user.id == ADMIN_ID)
+@router.callback_query(F.data.startswith("sched:"), F.from_user.id == ADMIN_ID)
 async def schedule_day(callback: CallbackQuery, state: FSMContext):
-    _, key, weekday = callback.data.split("_", 2)
+    _, key, weekday = callback.data.split(":", 2)
     rows = await get_master_schedule(key)
     current = next((r for r in rows if int(r[0]) == int(weekday)), None)
     current_text = ""
@@ -390,7 +391,7 @@ async def schedule_day(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.adding_master_confirm, F.from_user.id == ADMIN_ID)
 async def schedule_save(message: Message, state: FSMContext):
-    value = message.text.strip().lower()
+    value = (message.text or "").strip().lower()
     data = await state.get_data()
     if value in ("выходной", "выходной день", "off"):
         await set_master_day(data["schedule_master"], data["schedule_weekday"], None, None)
