@@ -177,6 +177,9 @@ async def _notify_client(booking, event=None):
 
 async def create_web_booking(request):
     user = _user_from_request(request)
+    # Only clients may create bookings from the Mini App.
+    if _is_admin(user) or await get_master_by_telegram_id(int(user["id"])):
+        raise web.HTTPForbidden(text="Staff accounts cannot create bookings")
     try:
         data = await request.json()
     except Exception:
