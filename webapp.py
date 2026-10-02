@@ -272,6 +272,8 @@ async def create_web_booking(request):
             master_row = await get_master_by_name(booking["master"])
             if master_row and master_row.get("telegram_id"):
                 from aiogram import Bot
+                from aiogram.client.default import DefaultBotProperties
+                from aiogram.enums import ParseMode
                 bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
                 try:
                     await bot.send_message(master_row["telegram_id"], f"📋 <b>Новая запись к вам</b>\n\n💇 {html.escape(str(booking['service']))}\n👤 {html.escape(str(booking['name']))}\n📞 {html.escape(str(booking['phone']))}\n📅 {html.escape(str(booking['date']))} · {html.escape(str(booking['time']))}")
