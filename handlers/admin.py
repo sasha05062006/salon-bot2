@@ -82,7 +82,7 @@ async def send_filtered(message: Message, mode: str):
         await message.answer("Записей нет.")
         return
     for b in selected:
-        await message.answer(format_booking(b), reply_markup=booking_actions(b["id"],b.get("status","new"))
+        await message.answer(format_booking(b), reply_markup=booking_actions(b["id"],b.get("status","new")))
 
 
 @router.callback_query(F.data.in_({"admin_today", "admin_tomorrow", "admin_all"}), F.from_user.id == ADMIN_ID)
