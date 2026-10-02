@@ -33,13 +33,15 @@ def admin_kb():
     ])
 
 
-def booking_actions(booking_id: int):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"booking_confirm_{booking_id}"),
-            InlineKeyboardButton(text="❌ Отменить", callback_data=f"booking_cancel_{booking_id}")
-        ]
-    ])
+def booking_actions(booking_id: int, status="new"):
+    rows=[]
+    if status=="new":
+        rows.append([InlineKeyboardButton(text="✅ Подтвердить",callback_data=f"booking_confirm_{booking_id}"),InlineKeyboardButton(text="❌ Отменить",callback_data=f"booking_cancel_{booking_id}")])
+    elif status=="confirmed":
+        rows.append([InlineKeyboardButton(text="🛠 В работу",callback_data=f"booking_progress_{booking_id}"),InlineKeyboardButton(text="❌ Отменить",callback_data=f"booking_cancel_{booking_id}")])
+    elif status=="in_progress":
+        rows.append([InlineKeyboardButton(text="✅ Выполнена",callback_data=f"booking_done_{booking_id}"),InlineKeyboardButton(text="🚫 Не пришёл",callback_data=f"booking_noshow_{booking_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows or [[InlineKeyboardButton(text="ℹ️ Статус без действий",callback_data="noop")]])
 
 
 def format_booking(b):
@@ -80,7 +82,7 @@ async def send_filtered(message: Message, mode: str):
         await message.answer("Записей нет.")
         return
     for b in selected:
-        await message.answer(format_booking(b), reply_markup=booking_actions(b["id"]))
+        await message.answer(format_booking(b), reply_markup=booking_actions(b["id"],b.get("status","new"))
 
 
 @router.callback_query(F.data.in_({"admin_today", "admin_tomorrow", "admin_all"}), F.from_user.id == ADMIN_ID)
