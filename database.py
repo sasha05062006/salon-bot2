@@ -335,50 +335,49 @@ async def get_bookings_for_user(user_id: int):
         return [dict(r) for r in rows]
 
 
-async def update_booking_details(booking_id: int, date: str, time: str, master: str):
+async def update_booking_details(booking_id: int, date: str, time: str, master_key: str):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("PRAGMA busy_timeout=5000")
         await db.execute("BEGIN IMMEDIATE")
-        db.row_factory = aiosqlite.Row
-        row = await (await db.execute("SELECT service,duration,status FROM bookings WHERE id=?", (booking_id,))).fetchone()
-        if not row or row["status"] == "cancelled":
-            return False
-        duration = int(row["duration"] or 30)
-        service_row = await (await db.execute("SELECT key FROM services WHERE name_ru=? OR name_uz=? LIMIT 1", (row["service"], row["service"]))).fetchone()
-        if not service_row:
-            return False
-        allowed = await (await db.execute("SELECT 1 FROM service_masters WHERE service_key=? AND master_key=? LIMIT 1", (service_row["key"], master))).fetchone()
+        db.row_factory=aiosqlite.Row
+        row=await (await db.execute("SELECT service,service_key,duration,status FROM bookings WHERE id=?",(booking_id,))).fetchone()
+        if not row or row["status"]=="cancelled":
+            await db.rollback(); return False
+        master=await (await db.execute("SELECT * FROM masters WHERE key=? AND active=1",(master_key,))).fetchone()
+        if not master:
+            await db.rollback(); return False
+        service_key=row["service_key"]
+        if not service_key:
+            sr=await (await db.execute("SELECT key FROM services WHERE name_ru=? OR name_uz=? LIMIT 1",(row["service"],row["service"]))).fetchone()
+            service_key=sr[0] if sr else None
+        if not service_key:
+            await db.rollback(); return False
+        allowed=await (await db.execute("SELECT 1 FROM service_masters WHERE service_key=? AND master_key=? LIMIT 1",(service_key,master_key))).fetchone()
         if not allowed:
-            return False
-        parsed = datetime.strptime(date, "%d.%m")
-        start_dt = datetime.strptime(time, "%H:%M")
-        end_dt = start_dt + timedelta(minutes=duration)
-        now_tz = datetime.now(ZoneInfo("Asia/Tashkent"))
-        year = now_tz.year
-        if parsed.month < now_tz.month and (now_tz.month - parsed.month) >= 6:
-            year += 1
-        selected = parsed.replace(year=year)
-        if selected.date() < now_tz.date():
-            return False
-        weekday = selected.weekday()
-        sched = await (await db.execute("SELECT start_time,end_time,lunch_start,lunch_end FROM master_schedule WHERE master_key=? AND weekday=?", (master,weekday))).fetchone()
+            await db.rollback(); return False
+        selected=datetime.strptime(_date_to_iso(date),"%Y-%m-%d")
+        now=datetime.now(ZoneInfo("Asia/Tashkent"))
+        if selected.date()<now.date():
+            await db.rollback(); return False
+        if selected.date()==now.date() and datetime.strptime(time,"%H:%M").time()<=now.time():
+            await db.rollback(); return False
+        start_dt=datetime.strptime(time,"%H:%M")
+        end_dt=start_dt+timedelta(minutes=int(row["duration"] or 30))
+        sched=await (await db.execute("SELECT start_time,end_time,lunch_start,lunch_end FROM master_schedule WHERE master_key=? AND weekday=?",(master_key,selected.weekday()))).fetchone()
         if not sched:
-            return False
-        work_start = datetime.strptime(sched["start_time"], "%H:%M")
-        work_end = datetime.strptime(sched["end_time"], "%H:%M")
-        lunch_start = datetime.strptime(sched["lunch_start"], "%H:%M") if sched["lunch_start"] else None
-        lunch_end = datetime.strptime(sched["lunch_end"], "%H:%M") if sched["lunch_end"] else None
-        if start_dt < work_start or end_dt > work_end or (lunch_start and lunch_end and start_dt < lunch_end and end_dt > lunch_start):
-            return False
-        cursor = await db.execute("SELECT time,COALESCE(duration,30) FROM bookings WHERE date=? AND master=? AND status!='cancelled' AND id!=?", (date, master, booking_id))
-        for existing_time, existing_duration in await cursor.fetchall():
-            es = datetime.strptime(existing_time, "%H:%M")
-            ee = es + timedelta(minutes=int(existing_duration or 30))
-            if start_dt < ee and es < end_dt:
-                return False
-        await db.execute("UPDATE bookings SET date=?,time=?,master=? WHERE id=?", (date,time,master,booking_id))
-        await db.commit()
-        return True
+            await db.rollback(); return False
+        ws,we=datetime.strptime(sched["start_time"],"%H:%M"),datetime.strptime(sched["end_time"],"%H:%M")
+        ls=datetime.strptime(sched["lunch_start"],"%H:%M") if sched["lunch_start"] else None
+        le=datetime.strptime(sched["lunch_end"],"%H:%M") if sched["lunch_end"] else None
+        if start_dt<ws or end_dt>we or (ls and le and start_dt<le and end_dt>ls):
+            await db.rollback(); return False
+        cursor=await db.execute("SELECT time,COALESCE(duration,30) FROM bookings WHERE date=? AND (master_key=? OR (master_key IS NULL AND master=?)) AND status!='cancelled' AND id!=?",(date,master_key,master["name_ru"],booking_id))
+        for et,ed in await cursor.fetchall():
+            es=datetime.strptime(et,"%H:%M"); ee=es+timedelta(minutes=int(ed or 30))
+            if start_dt<ee and es<end_dt:
+                await db.rollback(); return False
+        await db.execute("UPDATE bookings SET date=?,time=?,date_iso=?,master=?,master_key=?,service_key=? WHERE id=?",(date,time,_date_to_iso(date),master["name_ru"],master_key,service_key,booking_id))
+        await db.commit(); return True
 
 
 async def get_bookings_filtered(date=None, master=None, status=None, q=None, date_from=None, date_to=None):
