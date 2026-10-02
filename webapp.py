@@ -403,9 +403,16 @@ async def booking_detail(request):
 
 async def booking_status(request):
     user = _user_from_request(request)
-    if not _is_admin(user):
-        raise web.HTTPForbidden(text="Admin access required")
     booking_id = int(request.match_info["booking_id"])
+    is_admin = _is_admin(user)
+    master = await get_master_by_telegram_id(int(user["id"]))
+    booking = await get_booking(booking_id)
+    if not booking:
+        raise web.HTTPNotFound(text="Booking not found")
+    if not is_admin and not master:
+        raise web.HTTPForbidden(text="Staff access required")
+    if master and not is_admin and booking["master"] not in {master.get("name_ru"), master.get("name_uz"), master.get("key")}:
+        raise web.HTTPForbidden(text="Booking is not assigned to you")
     try:
         data = await request.json()
     except Exception:
