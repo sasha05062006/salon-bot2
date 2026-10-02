@@ -363,13 +363,13 @@ async def schedule_list(callback: CallbackQuery):
         await callback.message.answer(
             f"🕐 Расписание: <b>{m['name_ru']}</b>",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="Пн", callback_data=f"sched_{m['key']}_0"),
-                 InlineKeyboardButton(text="Вт", callback_data=f"sched_{m['key']}_1"),
-                 InlineKeyboardButton(text="Ср", callback_data=f"sched_{m['key']}_2"),
-                 InlineKeyboardButton(text="Чт", callback_data=f"sched_{m['key']}_3")],
-                [InlineKeyboardButton(text="Пт", callback_data=f"sched_{m['key']}_4"),
-                 InlineKeyboardButton(text="Сб", callback_data=f"sched_{m['key']}_5"),
-                 InlineKeyboardButton(text="Вс", callback_data=f"sched_{m['key']}_6")]
+                [InlineKeyboardButton(text="Пн", callback_data=f"sched:{m['key']}:0"),
+                 InlineKeyboardButton(text="Вт", callback_data=f"sched:{m['key']}:1"),
+                 InlineKeyboardButton(text="Ср", callback_data=f"sched:{m['key']}:2"),
+                 InlineKeyboardButton(text="Чт", callback_data=f"sched:{m['key']}:3")],
+                [InlineKeyboardButton(text="Пт", callback_data=f"sched:{m['key']}:4"),
+                 InlineKeyboardButton(text="Сб", callback_data=f"sched:{m['key']}:5"),
+                 InlineKeyboardButton(text="Вс", callback_data=f"sched:{m['key']}:6")]
             ])
         )
     await callback.answer()
