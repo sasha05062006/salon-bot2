@@ -40,6 +40,8 @@ async def reminder_loop(bot):
 async def main():
     logging.basicConfig(level=logging.INFO)
     bot = None
+    web_runner = None
+    reminder_task = None
     try:
         await init_db()
         await seed_catalog()
@@ -49,16 +51,15 @@ async def main():
         dp.include_router(booking.router)
         dp.include_router(admin.router)
 
-        await bot.set_my_commands(
-            [
-                BotCommand(command="bookings", description="Открыть панель записей"),
-                BotCommand(command="salon_setup", description="Настройки салона"),
-                BotCommand(command="bot_settings", description="Настройки бота"),
-            ],
-            scope=BotCommandScopeChat(chat_id=ADMIN_ID),
-        )
-
-        asyncio.create_task(reminder_loop(bot))
+        try:
+            if ADMIN_ID:
+                await bot.set_my_commands(
+                    [BotCommand(command="bookings", description="Открыть панель записей"),BotCommand(command="salon_setup", description="Настройки салона"),BotCommand(command="bot_settings", description="Настройки бота")],
+                    scope=BotCommandScopeChat(chat_id=ADMIN_ID),
+                )
+        except Exception:
+            logging.exception("Failed to configure admin commands")
+        reminder_task = asyncio.create_task(reminder_loop(bot))
 
         if WEBAPP_URL:
             await bot.set_chat_menu_button(
@@ -67,18 +68,19 @@ async def main():
                     web_app=WebAppInfo(url=WEBAPP_URL),
                 )
             )
-            await bot.set_chat_menu_button(
+            if ADMIN_ID:
+                await bot.set_chat_menu_button(
                 chat_id=ADMIN_ID,
                 menu_button=MenuButtonWebApp(
                     text="📱 Приложение",
                     web_app=WebAppInfo(url=WEBAPP_URL),
                 )
-            )
+                )
             logging.info("Telegram Mini App URL: %s", WEBAPP_URL)
         else:
             logging.warning("WEBAPP_URL is empty. Generate a public Railway domain or set WEBAPP_URL.")
 
-        await start_webapp()
+        web_runner = await start_webapp()
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     except Exception:
@@ -89,7 +91,8 @@ async def main():
             except Exception:
                 pass
         try:
-            await start_webapp()
+            if web_runner is None:
+                web_runner = await start_webapp()
         except Exception:
             logging.exception("Failed to start fallback web server")
             raise
