@@ -499,6 +499,12 @@ async def booking_status(request):
     status = str(data.get("status", ""))
     master_statuses = {"completed", "no_show"}
     if master and not is_admin:
+        if status == "comment":
+            from database import set_master_comment
+            comment=str(data.get("comment","")).strip()[:1000]
+            if not await set_master_comment(booking_id,comment):
+                raise web.HTTPBadRequest(text="Cannot save comment")
+            return web.json_response({"ok":True,"booking":await get_booking(booking_id)})
         if status not in master_statuses:
             raise web.HTTPForbidden(text="Masters may only set completed or no_show")
         comment = str(data.get("comment", "")).strip()[:1000]
