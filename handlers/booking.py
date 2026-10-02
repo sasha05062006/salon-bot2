@@ -1,4 +1,5 @@
 import logging
+import html
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -28,7 +29,7 @@ async def process_service(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", "ru")
     
-    service_key = callback.data.split("_")[1]
+    service_key = callback.data[len("service_"):]
     service_row = await get_service(service_key)
     if not service_row:
         await callback.answer("Услуга недоступна", show_alert=True)
@@ -58,8 +59,8 @@ async def process_master(callback: CallbackQuery, state: FSMContext):
     if not master_row:
         await callback.answer("Мастер недоступен", show_alert=True)
         return
-    master = master_row["name_ru"] if lang == "ru" else master_row["name_uz"]
-    await state.update_data(master=master, master_key=master_key)
+    master = master_row["name_ru"]
+    await state.update_data(master=master, master_name_uz=master_row["name_uz"], master_key=master_key, service_name_ru=(await get_service(data.get("service_key")))["name_ru"])
     await state.set_state(BookingStates.waiting_for_date)
 
     await callback.message.edit_text(
@@ -71,62 +72,27 @@ async def process_master(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("date_"))
 async def process_date(callback: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("lang", "ru")
-    
-    date = callback.data.split("_")[1]
-    master_key = data.get("master_key")
-    schedule_rows = await get_master_schedule(master_key)
-    schedule = {int(row[0]): (row[1], row[2], row[3], row[4]) for row in schedule_rows}
-    parsed = datetime.strptime(date, "%d.%m")
-    now_tz = datetime.now(ZoneInfo("Asia/Tashkent"))
-    year = now_tz.year
-    if parsed.month < now_tz.month and (now_tz.month - parsed.month) >= 6:
-        year += 1
-    selected_date = parsed.replace(year=year)
-    weekday = selected_date.weekday()
-    range_data = schedule.get(weekday)
-    available = []
-    service_key = data.get("service_key")
-    service_row = await get_service(service_key)
-    duration = service_row["duration"] if service_row else 30
-    if range_data:
-        start, end, lunch_start, lunch_end = range_data
-        cur = datetime.strptime(start, "%H:%M")
-        finish = datetime.strptime(end, "%H:%M")
-        lunch_s = datetime.strptime(lunch_start, "%H:%M") if lunch_start else None
-        lunch_e = datetime.strptime(lunch_end, "%H:%M") if lunch_end else None
-        while cur + timedelta(minutes=duration) <= finish:
-            slot = cur.strftime("%H:%M")
-            slot_end = cur + timedelta(minutes=duration)
-            in_lunch = lunch_s and lunch_e and cur < lunch_e and slot_end > lunch_s
-            if not in_lunch and await is_slot_available(date, slot, duration, data.get("master")):
-                available.append(slot)
-            cur += timedelta(minutes=30)
-
+    data=await state.get_data()
+    lang=data.get("lang","ru")
+    date=callback.data[len("date_"):]
+    service_key=data.get("service_key"); master_key=data.get("master_key")
+    from database import get_free_slots
+    available=await get_free_slots(service_key,master_key,date)
     await state.update_data(date=date)
     await state.set_state(BookingStates.waiting_for_time)
-    
     await callback.message.edit_text(
-        f"✅ {data.get('service')}\n👩‍🎨 {data.get('master')}\n📅 {date}\n\n{t(lang, 'choose_time')}",
-        reply_markup=times_kb(lang, available)
+        f"✅ {data.get('service')}\n👩‍🎨 {data.get('master')}\n📅 {date}\n\n{t(lang,'choose_time')}",
+        reply_markup=times_kb(lang,available)
     )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("time_"))
 async def process_time(callback: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    lang = data.get("lang", "ru")
-    
-    time = callback.data.split("_")[1]
-    await state.update_data(time=time)
-    await state.set_state(BookingStates.waiting_for_name)
-    
-    await callback.message.edit_text(
-        f"✅ {data.get('service')}\n📅 {data.get('date')}  {time}\n\n{t(lang, 'enter_name')}",
-        reply_markup=cancel_kb(lang)
-    )
+    data=await state.get_data(); lang=data.get("lang","ru"); time=callback.data[len("time_"):]
+    await state.update_data(time=time); await state.set_state(BookingStates.waiting_for_name)
+    await callback.message.edit_text(f"✅ {data.get('service')}\n📅 {data.get('date')}  {time}")
+    await callback.message.answer(t(lang,"enter_name"), reply_markup=cancel_kb(lang))
     await callback.answer()
 
 
@@ -140,7 +106,10 @@ async def process_name(message: Message, state: FSMContext):
         await message.answer(t(lang, "booking_cancelled"), reply_markup=main_menu(lang))
         return
     
-    await state.update_data(name=message.text)
+    name=(message.text or "").strip()
+    if not name or len(name)>60:
+        await message.answer(t(lang,"enter_name"), reply_markup=cancel_kb(lang)); return
+    await state.update_data(name=name)
     await state.set_state(BookingStates.waiting_for_phone)
     await message.answer(t(lang, "enter_phone"), reply_markup=phone_kb(lang))
 
@@ -175,6 +144,9 @@ async def process_phone(message: Message, state: FSMContext):
     service_row = await get_service(service_key)
     duration = service_row["duration"] if service_row else 30
 
+    if len(phone)>20:
+        await message.answer(t(lang,"phone_invalid"), reply_markup=phone_kb(lang)); return
+
     # Final schedule/lunch check immediately before saving the booking.
     schedule_rows = await get_master_schedule(data.get("master_key"))
     parsed = datetime.strptime(date, "%d.%m")
@@ -207,8 +179,10 @@ async def process_phone(message: Message, state: FSMContext):
     saved = await add_booking(
         user_id=message.from_user.id,
         username=message.from_user.username or "",
-        service=service,
+        service=service_row["name_ru"],
         master=master,
+        service_key=service_key,
+        master_key=data.get("master_key"),
         date=date,
         time=time,
         name=name,
@@ -228,7 +202,7 @@ async def process_phone(message: Message, state: FSMContext):
         if master_row and master_row.get("telegram_id"):
             await message.bot.send_message(
                 master_row["telegram_id"],
-                f"📋 <b>Новая запись к вам</b>\n\n💇 {service}\n👤 {name}\n📞 {phone}\n📅 {date} · {time}"
+                f"📋 <b>Новая запись к вам</b>\n\n💇 {html.escape(str(service))}\n👤 {html.escape(str(name))}\n📞 {html.escape(str(phone))}\n📅 {html.escape(str(date))} · {html.escape(str(time))}"
             )
     except Exception:
         logging.exception("Failed to notify master about Telegram booking")
@@ -236,12 +210,12 @@ async def process_phone(message: Message, state: FSMContext):
     # Уведомление админу
     text_admin = (
         f"🆕 <b>Новая запись!</b>\n\n"
-        f"Услуга: {service}\n"
-        f"Мастер: {master}\n"
-        f"Дата: {date}\n"
-        f"Время: {time}\n"
-        f"Имя: {name}\n"
-        f"Телефон: {phone}\n"
+        f"Услуга: {html.escape(str(service))}\n"
+        f"Мастер: {html.escape(str(master))}\n"
+        f"Дата: {html.escape(str(date))}\n"
+        f"Время: {html.escape(str(time))}\n"
+        f"Имя: {html.escape(str(name))}\n"
+        f"Телефон: {html.escape(str(phone))}\n"
         f"Язык: {lang}\n"
         f"Username: @{message.from_user.username or 'нет'}"
     )
