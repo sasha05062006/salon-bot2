@@ -430,7 +430,7 @@ async def booking_status(request):
     except Exception:
         raise web.HTTPBadRequest(text="Invalid JSON")
     status = str(data.get("status", ""))
-    master_statuses = {"completed", "no_show"}
+    master_statuses = {"completed", "no_show", "in_progress"}
     if master and not is_admin:
         if status not in master_statuses:
             raise web.HTTPForbidden(text="Masters may only set completed or no_show")
@@ -442,7 +442,7 @@ async def booking_status(request):
         if status not in {"new", "confirmed", "cancelled"}:
             raise web.HTTPBadRequest(text="Invalid status")
         if not await update_booking_status(booking_id, status):
-        raise web.HTTPNotFound(text="Booking not found")
+            raise web.HTTPNotFound(text="Booking not found")
     updated = await get_booking(booking_id)
     if updated:
         try:
@@ -458,7 +458,8 @@ async def index(request):
 
 def create_app():
     app = web.Application()
-    app.router.add_get("/health", health)\n    app.router.add_get("/maintenance", maintenance)
+    app.router.add_get("/health", health)
+    app.router.add_get("/maintenance", maintenance)
     app.router.add_get("/api/me", me)
     app.router.add_get("/api/catalog", catalog)
     app.router.add_post("/api/bookings", create_web_booking)
