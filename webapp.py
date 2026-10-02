@@ -1,4 +1,5 @@
 import hashlib
+import html
 import hmac
 import json
 import logging
@@ -11,7 +12,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, get_master_by_name, deactivate_master, add_service, deactivate_service, update_service, set_master_service, set_master_day
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, get_master_by_name, deactivate_master, add_service, get_free_slots, deactivate_service, update_service, set_master_service, set_master_day
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -97,10 +98,10 @@ async def catalog(request):
                 for m in masters
             ],
         })
-    return web.json_response({"ok": True, "services": result, "masters": await __import__("database").get_masters(), "salon": await get_salon_settings(), "is_admin": _is_admin(user)})
+    public_masters=[{"key":m["key"],"name_ru":m["name_ru"],"name_uz":m["name_uz"]} for m in await __import__("database").get_masters()]\n    return web.json_response({"ok": True, "services": result, "masters": public_masters, "salon": await get_salon_settings(), "is_admin": _is_admin(user), "today": datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d")})
 
 
-async def _notify_admin(booking):
+async def _notify_admin(booking, event="created"):
     from aiogram import Bot
     from aiogram.client.default import DefaultBotProperties
     from aiogram.enums import ParseMode
@@ -108,7 +109,7 @@ async def _notify_admin(booking):
     bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
         text = (
-            "🔔 <b>Новая запись!</b>\n\n"
+            "❌ <b>Клиент отменил запись</b>\n\n" if event=="cancelled" else "🔔 <b>Новая запись!</b>\n\n"
             f"🆔 Запись №{booking['id']}\n"
             f"💇 <b>{booking['service']}</b>\n"
             f"👩‍🎨 Мастер: {booking['master']}\n"
@@ -120,7 +121,7 @@ async def _notify_admin(booking):
         await bot.send_message(
             ADMIN_ID, text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📋 Открыть записи", url=WEBAPP_URL)]
+                [InlineKeyboardButton(text="📋 Открыть записи", web_app=__import__("aiogram").types.WebAppInfo(url=WEBAPP_URL))]
             ])
         )
     finally:
@@ -244,8 +245,10 @@ async def create_web_booking(request):
         master=master["name_ru"],
         date=date,
         time=time,
-        name=str(data["name"]).strip(),
-        phone=str(data["phone"]).strip(),
+        name=name,
+        phone=phone,
+        service_key=service["key"],
+        master_key=master["key"],
         lang=str(data.get("lang", "ru")),
         duration=duration,
     )
@@ -271,6 +274,16 @@ async def create_web_booking(request):
     return web.json_response({"ok": True})
 
 
+async def slots(request):
+    user=_user_from_request(request)
+    service_key=request.query.get("service_key","").strip()
+    master_key=request.query.get("master_key","").strip()
+    date=request.query.get("date","").strip()
+    if not service_key or not master_key or not date:
+        raise web.HTTPBadRequest(text="service_key, master_key and date are required")
+    return web.json_response({"ok":True,"slots":await get_free_slots(service_key,master_key,date)})
+
+
 async def reschedule_booking(request):
     user = _user_from_request(request)
     if not _is_admin(user):
@@ -278,15 +291,15 @@ async def reschedule_booking(request):
     try:
         data = await request.json()
         booking_id = int(data["booking_id"])
-        date, time, master = str(data["date"]), str(data["time"]), str(data["master"])
+        date, time, master_key = str(data["date"]), str(data["time"]), str(data["master_key"])
     except Exception:
         raise web.HTTPBadRequest(text="Invalid reschedule data")
     booking = await get_booking(booking_id)
     if not booking:
         raise web.HTTPNotFound(text="Booking not found")
-    ok = await update_booking_details(booking_id, date, time, master)
+    ok = await update_booking_details(booking_id, date, time, master_key)
     if not ok:
-        raise web.HTTPConflict(text="Selected time is unavailable")
+        raise web.HTTPConflict(text="Selected time is unavailable or master is invalid")
     updated = await get_booking(booking_id)
     if updated:
         try:
@@ -415,12 +428,7 @@ async def admin_booking_filters(request):
     user = _user_from_request(request)
     if not _is_admin(user):
         raise web.HTTPForbidden(text="Admin access required")
-    return web.json_response({"ok": True, "bookings": await get_bookings_filtered(
-        date=request.query.get("date") or None,
-        master=request.query.get("master") or None,
-        status=request.query.get("status") or None,
-        q=request.query.get("q") or None,
-    ), "stats": await get_booking_stats()})
+    return web.json_response({"ok": True, "bookings": await get_bookings_filtered(date=request.query.get("date") or None, master=request.query.get("master") or None, status=request.query.get("status") or None, q=request.query.get("q") or None, date_from=request.query.get("date_from") or None, date_to=request.query.get("date_to") or None), "stats": await get_booking_stats()})
 
 
 async def client_cancel_booking(request):
@@ -437,7 +445,7 @@ async def client_cancel_booking(request):
     updated = await get_booking(booking_id)
     if updated:
         try:
-            await _notify_admin(updated)
+            await _notify_admin(updated, event="cancelled")
         except Exception:
             logging.exception("Failed to notify admin about client cancellation %s", booking_id)
     return web.json_response({"ok": True, "booking": updated})
@@ -499,7 +507,9 @@ async def booking_status(request):
 
 
 async def index(request):
-    return web.FileResponse(STATIC_DIR / "index.html")
+    resp=web.FileResponse(STATIC_DIR / "index.html")
+    resp.headers["Cache-Control"]="no-store, no-cache, must-revalidate, max-age=0"
+    return resp
 
 
 def create_app():
@@ -508,14 +518,15 @@ def create_app():
     app.router.add_get("/maintenance", maintenance)
     app.router.add_get("/api/me", me)
     app.router.add_get("/api/catalog", catalog)
+    app.router.add_get("/api/slots", slots)
     app.router.add_post("/api/bookings", create_web_booking)
     app.router.add_get("/api/my-bookings", my_bookings)
     app.router.add_post("/api/admin/bookings/reschedule", reschedule_booking)
     app.router.add_get("/api/admin/bookings", bookings)
     app.router.add_get("/api/bookings/{booking_id}", booking_detail)
+    app.router.add_get("/api/admin/bookings/filter", admin_booking_filters)
     app.router.add_get("/api/admin/bookings/{booking_id}", booking_detail)
     app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
-    app.router.add_get("/api/admin/bookings/filter", admin_booking_filters)
     app.router.add_get("/api/admin/catalog", admin_catalog)
     app.router.add_get("/api/admin/schedules", admin_schedules)
     app.router.add_patch("/api/admin/schedules", admin_update_schedule)
