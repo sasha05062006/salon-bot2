@@ -418,9 +418,18 @@ async def booking_status(request):
     except Exception:
         raise web.HTTPBadRequest(text="Invalid JSON")
     status = str(data.get("status", ""))
-    if status not in {"new", "confirmed", "cancelled"}:
-        raise web.HTTPBadRequest(text="Invalid status")
-    if not await update_booking_status(booking_id, status):
+    master_statuses = {"completed", "no_show"}
+    if master and not is_admin:
+        if status not in master_statuses:
+            raise web.HTTPForbidden(text="Masters may only set completed or no_show")
+        comment = str(data.get("comment", "")).strip()[:1000]
+        from database import update_booking_master_result
+        if not await update_booking_master_result(booking_id, status, comment):
+            raise web.HTTPBadRequest(text="Invalid master status")
+    else:
+        if status not in {"new", "confirmed", "cancelled"}:
+            raise web.HTTPBadRequest(text="Invalid status")
+        if not await update_booking_status(booking_id, status):
         raise web.HTTPNotFound(text="Booking not found")
     updated = await get_booking(booking_id)
     if updated:
