@@ -393,12 +393,17 @@ async def client_cancel_booking(request):
 
 async def booking_detail(request):
     user = _user_from_request(request)
-    if not _is_admin(user):
-        raise web.HTTPForbidden(text="Admin access required")
     booking = await get_booking(int(request.match_info["booking_id"]))
     if not booking:
         raise web.HTTPNotFound(text="Booking not found")
-    return web.json_response({"ok": True, "booking": booking})
+    if _is_admin(user):
+        return web.json_response({"ok": True, "booking": booking})
+    master = await get_master_by_telegram_id(int(user["id"]))
+    if master and booking["master"] in {master.get("name_ru"), master.get("name_uz"), master.get("key")}:
+        return web.json_response({"ok": True, "booking": booking})
+    if int(booking["user_id"]) == int(user["id"]):
+        return web.json_response({"ok": True, "booking": booking})
+    raise web.HTTPForbidden(text="Access denied")
 
 
 async def booking_status(request):
