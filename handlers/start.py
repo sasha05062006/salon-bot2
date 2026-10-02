@@ -6,6 +6,7 @@ from keyboards.inline import language_kb, main_menu
 from locales.texts import t
 from states import BookingStates
 from database import get_salon_settings, get_services
+import html
 
 router = Router()
 
@@ -14,8 +15,9 @@ router = Router()
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(BookingStates.choosing_language)
+    settings=await get_salon_settings()
     await message.answer(
-        t("ru", "welcome"),
+        t("ru","welcome",salon_name=html.escape(settings.get("name","Ваш салон")),description=html.escape(settings.get("description",""))),
         reply_markup=language_kb()
     )
 
