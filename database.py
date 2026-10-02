@@ -1,8 +1,9 @@
 import aiosqlite
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-DB_NAME = "bookings.db"
+DB_NAME = os.getenv("DB_PATH", "bookings.db")
 
 
 async def init_db():
@@ -41,9 +42,33 @@ async def init_db():
             await db.execute("ALTER TABLE master_schedule ADD COLUMN lunch_end TEXT")
         bcols = [r[1] for r in await (await db.execute("PRAGMA table_info(bookings)")).fetchall()]
         if "master_comment" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN master_comment TEXT")
+        if "service_key" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN service_key TEXT")
+        if "master_key" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN master_key TEXT")
+        if "date_iso" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN date_iso TEXT")
         if "reminder_24_sent" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN reminder_24_sent INTEGER NOT NULL DEFAULT 0")
         if "reminder_2_sent" not in bcols: await db.execute("ALTER TABLE bookings ADD COLUMN reminder_2_sent INTEGER NOT NULL DEFAULT 0")
+        await db.execute("""UPDATE bookings SET master_key=(SELECT key FROM masters WHERE name_ru=bookings.master OR name_uz=bookings.master)
+                            WHERE master_key IS NULL OR master_key=''""")
+        await db.execute("""UPDATE bookings SET service_key=(SELECT key FROM services WHERE name_ru=bookings.service OR name_uz=bookings.service)
+                            WHERE service_key IS NULL OR service_key=''""")
+        await db.execute("""UPDATE bookings SET master=(SELECT name_ru FROM masters WHERE key=bookings.master_key)
+                            WHERE master_key IN (SELECT key FROM masters)""")
+        await db.execute("""UPDATE bookings SET service=(SELECT name_ru FROM services WHERE key=bookings.service_key)
+                            WHERE service_key IN (SELECT key FROM services)""")
+        rows=await (await db.execute("SELECT id,date,created_at FROM bookings WHERE date_iso IS NULL OR date_iso=''")).fetchall()
+        for bid,d,created in rows:
+            try:
+                parsed=datetime.strptime(str(d),"%d.%m")
+                created_dt=datetime.fromisoformat(str(created).replace("Z","+00:00")) if created else datetime.now(ZoneInfo("Asia/Tashkent"))
+                year=created_dt.year+(1 if parsed.month<created_dt.month else 0)
+                await db.execute("UPDATE bookings SET date_iso=? WHERE id=?", (parsed.replace(year=year).strftime("%Y-%m-%d"),bid))
+            except Exception:
+                pass
+        settings={"name":SALON.get("name","SALON"),"description":SALON.get("description",""),"address":SALON.get("address",""),"phone":SALON.get("phone",""),"telegram":SALON.get("telegram",""),"work_hours":SALON.get("work_hours","")}
+        for k,v in settings.items():
+            await db.execute("INSERT OR IGNORE INTO salon_settings(key,value) VALUES(?,?)",(k,str(v)))
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_date_master ON bookings(date, master, status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_date_iso_master ON bookings(date_iso, master_key, status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status, date)")
         await db.commit()
@@ -88,15 +113,29 @@ async def seed_catalog():
         await db.commit()
 
 
-async def add_booking(user_id: int, username: str, service: str, master: str, date: str, time: str, name: str, phone: str, lang: str = "ru", duration: int = 30) -> int | None:
+def _date_to_iso(date_text, now=None):
+    now=now or datetime.now(ZoneInfo("Asia/Tashkent"))
+    p=datetime.strptime(str(date_text),"%d.%m")
+    y=now.year+(1 if p.month<now.month and now.month-p.month>=6 else 0)
+    return p.replace(year=y).strftime("%Y-%m-%d")
+
+
+async def add_booking(user_id: int, username: str, service: str, master: str, date: str, time: str, name: str, phone: str, lang: str = "ru", duration: int = 30, service_key=None, master_key=None) -> int | None:
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("PRAGMA busy_timeout=5000")
         await db.execute("BEGIN IMMEDIATE")
+        if not service_key:
+            row=await (await db.execute("SELECT key FROM services WHERE name_ru=? OR name_uz=? LIMIT 1",(service,service))).fetchone()
+            service_key=row[0] if row else None
+        if not master_key:
+            row=await (await db.execute("SELECT key FROM masters WHERE name_ru=? OR name_uz=? LIMIT 1",(master,master))).fetchone()
+            master_key=row[0] if row else None
+        date_iso=_date_to_iso(date)
         start = datetime.strptime(time, "%H:%M")
         end = start + timedelta(minutes=duration)
         cursor = await db.execute(
-            "SELECT time, COALESCE(duration,30) FROM bookings WHERE date=? AND master=? AND status!='cancelled'",
-            (date, master)
+            "SELECT time, COALESCE(duration,30) FROM bookings WHERE date=? AND (master_key=? OR (master_key IS NULL AND master=?)) AND status!='cancelled'",
+            (date, master_key, master)
         )
         for existing_time, existing_duration in await cursor.fetchall():
             existing_start = datetime.strptime(existing_time, "%H:%M")
@@ -148,8 +187,8 @@ async def is_slot_available(date: str, start_time: str, duration_minutes: int, m
     end = start + timedelta(minutes=duration_minutes)
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute(
-            "SELECT time,COALESCE(duration,30) FROM bookings WHERE date=? AND master=? AND status!='cancelled'",
-            (date, master)
+            "SELECT time,COALESCE(duration,30) FROM bookings WHERE date=? AND (master_key=? OR (master_key IS NULL AND master=?)) AND status!='cancelled'",
+            (date, master, master)
         )
         for existing_time, existing_duration in await cursor.fetchall():
             existing_start = datetime.strptime(existing_time, "%H:%M")
@@ -341,13 +380,17 @@ async def update_booking_details(booking_id: int, date: str, time: str, master: 
         return True
 
 
-async def get_bookings_filtered(date=None, master=None, status=None, q=None):
+async def get_bookings_filtered(date=None, master=None, status=None, q=None, date_from=None, date_to=None):
     async with aiosqlite.connect(DB_NAME) as db:
         db.row_factory = aiosqlite.Row
         sql = "SELECT * FROM bookings WHERE 1=1"
         args = []
         if date:
             sql += " AND date=?"; args.append(date)
+        if date_from:
+            sql += " AND COALESCE(date_iso,date)>=?"; args.append(date_from)
+        if date_to:
+            sql += " AND COALESCE(date_iso,date)<=?"; args.append(date_to)
         if master:
             sql += " AND master=?"; args.append(master)
         if status:
@@ -355,7 +398,7 @@ async def get_bookings_filtered(date=None, master=None, status=None, q=None):
         if q:
             sql += " AND (name LIKE ? OR phone LIKE ? OR username LIKE ?)"
             like = "%" + q + "%"; args.extend([like, like, like])
-        sql += " ORDER BY date ASC, time ASC, id ASC"
+        sql += " ORDER BY COALESCE(date_iso,date) ASC, time ASC, id ASC"
         rows = await (await db.execute(sql, args)).fetchall()
         return [dict(r) for r in rows]
 
@@ -388,7 +431,7 @@ async def get_master_by_telegram_id(telegram_id):
 async def get_bookings_for_master(master_name):
     async with aiosqlite.connect(DB_NAME) as db:
         db.row_factory = aiosqlite.Row
-        rows = await (await db.execute("SELECT * FROM bookings WHERE master=? AND status!='cancelled' ORDER BY date ASC,time ASC,id ASC", (master_name,))).fetchall()
+        rows = await (await db.execute("SELECT * FROM bookings WHERE (master_key=? OR master=?) AND status!='cancelled' ORDER BY COALESCE(date_iso,date) ASC,time ASC,id ASC", (master_name, master_name))).fetchall()
         return [dict(r) for r in rows]
 
 async def get_confirmed_bookings_for_reminders():
@@ -417,5 +460,60 @@ async def update_booking_master_result(booking_id, status, comment=None):
         return False
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("UPDATE bookings SET status=?, master_comment=? WHERE id=?", (status, comment, booking_id))
+        await db.commit()
+        return True
+
+
+async def resolve_booking_date(date_text):
+    return datetime.strptime(_date_to_iso(date_text), "%Y-%m-%d").replace(tzinfo=ZoneInfo("Asia/Tashkent"))
+
+
+async def get_free_slots(service_key, master_key, date):
+    service=await get_service(service_key)
+    master=await get_master(master_key)
+    if not service or not master:
+        return []
+    try:
+        selected=await resolve_booking_date(date)
+    except Exception:
+        return []
+    now=datetime.now(ZoneInfo("Asia/Tashkent"))
+    if selected.date()<now.date():
+        return []
+    rows=await get_master_schedule(master_key)
+    row=next((r for r in rows if int(r[0])==selected.weekday()),None)
+    if not row:
+        return []
+    cur=datetime.strptime(row[1],"%H:%M")
+    finish=datetime.strptime(row[2],"%H:%M")
+    lunch_s=datetime.strptime(row[3],"%H:%M") if row[3] else None
+    lunch_e=datetime.strptime(row[4],"%H:%M") if row[4] else None
+    duration=int(service.get("duration") or 30)
+    async with aiosqlite.connect(DB_NAME) as db:
+        booked=await (await db.execute("SELECT time,COALESCE(duration,30) FROM bookings WHERE date=? AND (master_key=? OR (master_key IS NULL AND master=?)) AND status!='cancelled'",(date,master_key,master["name_ru"]))).fetchall()
+    busy=[]
+    for bt,bd in booked:
+        bs=datetime.strptime(bt,"%H:%M")
+        busy.append((bs,bs+timedelta(minutes=int(bd or 30))))
+    out=[]
+    while cur+timedelta(minutes=duration)<=finish:
+        end=cur+timedelta(minutes=duration)
+        ok=not(lunch_s and lunch_e and cur<lunch_e and end>lunch_s)
+        if selected.date()==now.date():
+            ok=ok and cur>=datetime.strptime(now.strftime("%H:%M"),"%H:%M")+timedelta(minutes=30)
+        ok=ok and all(not(cur<be and bs<end) for bs,be in busy)
+        if ok: out.append(cur.strftime("%H:%M"))
+        cur+=timedelta(minutes=30)
+    return out
+
+
+async def update_booking_master_result(booking_id, status, comment=None):
+    if status not in {"completed","no_show"}:
+        return False
+    async with aiosqlite.connect(DB_NAME) as db:
+        row=await (await db.execute("SELECT status FROM bookings WHERE id=?",(booking_id,))).fetchone()
+        if not row or row[0] not in {"confirmed","in_progress"}:
+            return False
+        await db.execute("UPDATE bookings SET status=?,master_comment=? WHERE id=?",(status,comment,booking_id))
         await db.commit()
         return True
