@@ -142,6 +142,36 @@ async def cancel_booking(callback: CallbackQuery):
     await callback.answer("Отменено")
 
 
+@router.callback_query(F.data.startswith("booking_progress_"), F.from_user.id == ADMIN_ID)
+async def progress_booking(callback: CallbackQuery):
+    booking_id=int(callback.data.rsplit("_",1)[1])
+    changed=await update_booking_status(booking_id,"in_progress")
+    if changed is None:
+        await callback.answer("Статус уже изменён",show_alert=True); return
+    await callback.message.edit_reply_markup(reply_markup=booking_actions(booking_id,"in_progress"))
+    await callback.answer("В работе")
+
+
+@router.callback_query(F.data.startswith("booking_done_"), F.from_user.id == ADMIN_ID)
+async def done_booking(callback: CallbackQuery):
+    booking_id=int(callback.data.rsplit("_",1)[1])
+    changed=await update_booking_status(booking_id,"completed")
+    if changed is None:
+        await callback.answer("Статус уже изменён",show_alert=True); return
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer("Выполнено")
+
+
+@router.callback_query(F.data.startswith("booking_noshow_"), F.from_user.id == ADMIN_ID)
+async def noshow_booking(callback: CallbackQuery):
+    booking_id=int(callback.data.rsplit("_",1)[1])
+    changed=await update_booking_status(booking_id,"no_show")
+    if changed is None:
+        await callback.answer("Статус уже изменён",show_alert=True); return
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer("Клиент не пришёл")
+
+
 @router.callback_query(F.data == "catalog_services", F.from_user.id == ADMIN_ID)
 async def catalog_services(callback: CallbackQuery):
     services = await get_services()
