@@ -4,13 +4,14 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import parse_qsl
 
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, get_master_by_name, deactivate_master, add_service, deactivate_service, update_service, set_master_service
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, get_master_by_name, deactivate_master, add_service, deactivate_service, update_service, set_master_service, set_master_day
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -368,6 +369,45 @@ async def admin_toggle_link(request):
     await set_master_service(str(data["service_key"]),str(data["master_key"]),bool(data.get("enabled")))
     return web.json_response({"ok":True})
 
+async def admin_schedules(request):
+    user = _user_from_request(request)
+    if not _is_admin(user):
+        raise web.HTTPForbidden(text="Admin access required")
+    catalog = await get_admin_catalog()
+    result = []
+    for m in catalog["masters"]:
+        result.append({"master": m, "schedule": [{"weekday": int(r[0]), "start": r[1], "end": r[2], "lunch_start": r[3], "lunch_end": r[4]} for r in await get_master_schedule(m["key"])]})
+    return web.json_response({"ok": True, "masters": result})
+
+
+async def admin_update_schedule(request):
+    user = _user_from_request(request)
+    if not _is_admin(user):
+        raise web.HTTPForbidden(text="Admin access required")
+    try:
+        d = await request.json()
+        master_key = str(d["master_key"]).strip()
+        weekday = int(d["weekday"])
+        start = str(d.get("start") or "").strip()
+        end = str(d.get("end") or "").strip()
+        lunch_start = str(d.get("lunch_start") or "").strip() or None
+        lunch_end = str(d.get("lunch_end") or "").strip() or None
+        if weekday < 0 or weekday > 6: raise ValueError
+        if not start and not end:
+            await set_master_day(master_key, weekday, None, None)
+        else:
+            datetime.strptime(start, "%H:%M"); datetime.strptime(end, "%H:%M")
+            if start >= end: raise ValueError
+            if (lunch_start is None) != (lunch_end is None): raise ValueError
+            if lunch_start and lunch_end:
+                datetime.strptime(lunch_start, "%H:%M"); datetime.strptime(lunch_end, "%H:%M")
+                if not (start <= lunch_start < lunch_end <= end): raise ValueError
+            await set_master_day(master_key, weekday, start, end, lunch_start, lunch_end)
+    except Exception:
+        raise web.HTTPBadRequest(text="Invalid schedule")
+    return web.json_response({"ok": True})
+
+
 async def admin_booking_filters(request):
     user = _user_from_request(request)
     if not _is_admin(user):
@@ -446,7 +486,8 @@ async def booking_status(request):
     updated = await get_booking(booking_id)
     if updated:
         try:
-            await _notify_client(updated)
+            if status in {"confirmed", "cancelled"}:
+                await _notify_client(updated)
         except Exception:
             logging.exception("Failed to notify client %s about booking %s", updated.get("user_id"), booking_id)
     return web.json_response({"ok": True, "booking": updated})
@@ -470,6 +511,8 @@ def create_app():
     app.router.add_patch("/api/admin/bookings/{booking_id}/status", booking_status)
     app.router.add_get("/api/admin/bookings/filter", admin_booking_filters)
     app.router.add_get("/api/admin/catalog", admin_catalog)
+    app.router.add_get("/api/admin/schedules", admin_schedules)
+    app.router.add_patch("/api/admin/schedules", admin_update_schedule)
     app.router.add_get("/api/master/bookings", master_bookings)
     app.router.add_patch("/api/admin/master-telegram", admin_set_master_telegram)
     app.router.add_post("/api/admin/masters", admin_create_master)
