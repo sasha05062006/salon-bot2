@@ -145,9 +145,10 @@ async def add_booking(user_id: int, username: str, service: str, master: str, da
                 return None
         insert_cursor = await db.execute(
             """INSERT INTO bookings
-            (user_id,username,service,master,date,time,duration,name,phone,lang,created_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-            (user_id, username, service, master, date, time, duration, name, phone, lang, datetime.now(ZoneInfo('Asia/Tashkent')).isoformat())
+            (user_id,username,service,master,date,time,duration,name,phone,lang,created_at,service_key,master_key,date_iso)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (user_id, username, service, master, date, time, duration, name, phone, lang,
+             datetime.now(ZoneInfo("Asia/Tashkent")).isoformat(), service_key, master_key, date_iso)
         )
         await db.commit()
         return insert_cursor.lastrowid
