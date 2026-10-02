@@ -22,7 +22,7 @@ async def reminder_loop(bot):
             now = datetime.now(tz)
             for b in await get_confirmed_bookings_for_reminders():
                 try:
-                    dt = datetime.strptime(f"{now.year}.{b['date']}.{b['time']}", "%Y.%d.%m.%H:%M").replace(tzinfo=tz)
+                    dt = datetime.strptime(f"{b.get("date_iso") or now.strftime("%Y-%m-%d")} {b["time"]}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
                     delta = dt - now
                     if timedelta(hours=23, minutes=30) <= delta <= timedelta(hours=24, minutes=30) and not b.get("reminder_24_sent"):
                         await bot.send_message(b["user_id"], f"⏰ <b>Напоминание о записи</b>\n\n💇 {b['service']}\n👩‍🎨 {b['master']}\n📅 {b['date']} · {b['time']}\n\nЖдём вас!")
