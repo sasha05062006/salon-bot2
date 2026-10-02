@@ -12,7 +12,7 @@ from urllib.parse import parse_qsl
 from aiohttp import web
 
 from config import ADMIN_ID, BOT_TOKEN, WEBAPP_URL
-from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, get_master_by_name, deactivate_master, add_service, get_free_slots, deactivate_service, update_service, set_master_service, set_master_day
+from database import add_booking, get_all_bookings, get_booking, get_master, get_masters_for_service, get_service, get_services, get_salon_settings, is_slot_available, update_booking_status, get_master_schedule, get_bookings_for_user, update_booking_details, get_bookings_filtered, get_booking_stats, update_booking_status_result, get_admin_catalog, add_master, set_master_telegram_id, get_master_by_telegram_id, get_bookings_for_master, get_master_by_name, deactivate_master, add_service, get_free_slots, deactivate_service, update_service, set_master_service, set_master_day
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "webapp"
@@ -514,8 +514,9 @@ async def booking_status(request):
     else:
         if status not in {"new", "confirmed", "cancelled", "in_progress", "completed", "no_show"}:
             raise web.HTTPBadRequest(text="Invalid status")
-        if not await update_booking_status(booking_id, status):
-            raise web.HTTPNotFound(text="Booking not found")
+        result=await update_booking_status_result(booking_id,status)
+        if result=="not_found": raise web.HTTPNotFound(text="Booking not found")
+        if result=="unchanged": raise web.HTTPConflict(text="Status is already set")
     updated = await get_booking(booking_id)
     if updated:
         try:
