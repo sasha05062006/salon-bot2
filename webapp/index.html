@@ -120,7 +120,34 @@ async function saveSchedule(k,d){const off=document.getElementById('sch_'+k+'_'+
 async function loadMasterBookings(){try{const r=await api('/api/master/bookings'),list=r.bookings||[];document.getElementById('masterBookings').innerHTML=list.length?list.map(b=>'<article class="booking" onclick="openBooking('+b.id+',\'master\')"><div class="booking-head"><b>'+esc(b.date)+' · '+esc(b.time)+'</b><span class="status">'+esc(T[state.lang].status[b.status]||b.status)+'</span></div><div class="meta">💇 '+esc(b.service)+'<br>👤 '+esc(b.name)+' · 📞 '+esc(b.phone)+'</div></article>').join(''):'<div class="empty">'+tr('empty')+'</div>'}catch(e){toast(tr('error'))}}
 async function loadMasterSummary(){const r=await api('/api/master/bookings');document.getElementById('staffSummary').innerHTML='<div class="staff-card"><b>'+esc(r.master.name_ru)+'</b><div class="meta">'+(r.bookings?.length||0)+' '+(state.lang==='ru'?'активных записей':'faol yozuv')+'</div><button class="primary" onclick="showTab(\'master\')">'+tr('records')+'</button></div>'}
 async function loadAdminSummary(){const r=await api('/api/admin/bookings'),n=state.data?.today?new Date(state.data.today+'T12:00:00'):new Date(),today=String(n.getDate()).padStart(2,'0')+'.'+String(n.getMonth()+1).padStart(2,'0');const c=(r.bookings||[]).filter(b=>b.date===today);document.getElementById('staffSummary').innerHTML='<div class="stats"><div class="stat"><b>'+c.length+'</b><span>Сегодня</span></div><div class="stat"><b>'+c.filter(b=>b.status==='new').length+'</b><span>Новые</span></div><div class="stat"><b>'+c.filter(b=>b.status==='confirmed').length+'</b><span>Подтверждены</span></div></div><button class="primary" onclick="showTab(\'admin\')">Открыть управление</button>'}
-async function init(){try{state.me=await api('/api/me');document.getElementById('hello').textContent=state.me.user.first_name||'';document.getElementById('recordsNav').classList.toggle('hidden',!!state.me.is_admin||!!state.me.is_master);document.getElementById('masterNav').classList.toggle('hidden',!state.me.is_master);document.getElementById('adminNav').classList.toggle('hidden',!state.me.is_admin);renderText();await loadCatalog();showTab('home')}catch(e){document.body.innerHTML='<div class="app"><div class="empty" style="margin-top:30vh"><h3>Не удалось открыть приложение</h3><p>'+esc(e.message||'Ошибка')+'</p><button class="primary" onclick="location.reload()">Повторить</button></div></div>'}}init();
+async function init(){
+  const setFatal=(title,message)=>{
+    document.body.innerHTML='<div class="app"><div class="empty" style="margin-top:22vh"><h3>'+esc(title)+'</h3><p>'+esc(message)+'</p><button class="primary" onclick="location.reload()">Повторить</button></div></div>';
+  };
+  try{
+    if(!tg){
+      setFatal('Откройте приложение в Telegram','Это Mini App и оно должно быть открыто из Telegram.');
+      return;
+    }
+    tg.ready();
+    tg.expand();
+    if(!tg.initData){
+      setFatal('Не удалось получить данные Telegram','Закройте Mini App и откройте его заново через кнопку «Приложение» в Telegram.');
+      return;
+    }
+    state.me=await api('/api/me');
+    document.getElementById('hello').textContent=state.me.user.first_name||'';
+    document.getElementById('recordsNav').classList.toggle('hidden',!!state.me.is_admin||!!state.me.is_master);
+    document.getElementById('masterNav').classList.toggle('hidden',!state.me.is_master);
+    document.getElementById('adminNav').classList.toggle('hidden',!state.me.is_admin);
+    renderText();
+    await loadCatalog();
+    showTab('home');
+  }catch(e){
+    setFatal('Не удалось открыть приложение',e?.message||'Ошибка соединения с сервером.');
+  }
+}
+init();
 </script>
 </body>
 </html>
